@@ -1,0 +1,66 @@
+# Reusable Security Workflow
+# Handles all security scanning tools.
+
+name: Reusable Security
+
+on:
+  workflow_call:
+    secrets:
+      GITLEAKS_LICENSE:
+        required: false
+      GITHUB_TOKEN:
+        required: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  security-analysis:
+    runs-on: ubuntu-latest
+    name: Security Analysis (${{ matrix.scan-type }})
+    strategy:
+      matrix:
+        scan-type: [secrets, bandit, safety, semgrep]
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required for Gitleaks
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install security tools
+      if: matrix.scan-type != 'secrets'
+      run: pip install bandit safety semgrep
+
+    - name: Run Bandit Security Scan
+      if: matrix.scan-type == 'bandit'
+      run: bandit -r . -f json -o bandit-report.json || true
+
+    - name: Run Safety Check
+      if: matrix.scan-type == 'safety'
+      run: safety check --json --output safety-report.json || true
+
+    - name: Run Semgrep
+      if: matrix.scan-type == 'semgrep'
+      run: semgrep --config=auto --json --output=semgrep-report.json .
+
+    - name: Run Gitleaks Secret Scan
+      if: matrix.scan-type == 'secrets'
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-${{ matrix.scan-type }}
+        path: |
+          bandit-report.json
+          safety-report.json
+          semgrep-report.json
+        if-no-files-found: ignore

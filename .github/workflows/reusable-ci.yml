@@ -1,0 +1,89 @@
+# Reusable CI Workflow
+# Handles code quality and unit testing.
+
+name: Reusable CI
+
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Analysis
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pylint flake8 black isort mypy pytest-cov
+    - name: Run Black, isort, Flake8
+      run: |
+        black --check --diff .
+        isort --check-only --diff .
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+    - name: Run MyPy (Type Checking)
+      run: mypy .
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      neo4j:
+        image: neo4j:5-community
+        ports: ['7474:7474', '7687:7687']
+        env:
+          NEO4J_AUTH: neo4j/testpassword
+          NEO4J_PLUGINS: '["apoc"]'
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p testpassword 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio pytest-mock neo4j redis
+    - name: Wait for services
+      run: |
+        timeout 60 bash -c 'until redis-cli -h localhost ping > /dev/null 2>&1; do sleep 2; done'
+        timeout 60 bash -c 'until python -c "from neo4j import GraphDatabase; d = GraphDatabase.driver(\"bolt://localhost:7687\", auth=(\"neo4j\", \"testpassword\")); d.verify_connectivity(); d.close()"; do sleep 2; done'
+    - name: Run Unit Tests
+      run: pytest tests/unit/ -v --cov=aetherveil_sentinel --cov-report=xml
+      env:
+        REDIS_URL: redis://localhost:6379
+        NEO4J_URI: bolt://localhost:7687
+        NEO4J_USER: neo4j
+        NEO4J_PASSWORD: testpassword
+    - name: Upload Coverage Reports
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: true
+      token: ${{ secrets.CODECOV_TOKEN }}

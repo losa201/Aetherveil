@@ -1,0 +1,45 @@
+# Main CI/CD Workflow
+# This workflow orchestrates calls to reusable workflows for CI, security, and deployment.
+
+name: Main CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # Run CI checks (quality, unit tests) on all pushes and PRs
+  ci-checks:
+    uses: ./.github/workflows/reusable-ci.yml
+    name: Code Quality and Unit Tests
+    secrets: inherit # Pass down secrets like CODECOV_TOKEN
+
+  # Run security scans on all pushes and PRs
+  security-scans:
+    uses: ./.github/workflows/reusable-security.yml
+    name: Security Analysis
+    secrets: inherit # Pass down secrets like GITHUB_TOKEN
+
+  # Deploy to Staging on pushes to the 'develop' branch
+  deploy-staging:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: [ci-checks, security-scans]
+    uses: ./.github/workflows/reusable-build-deploy.yml
+    name: Build and Deploy to Staging
+    with:
+      environment: staging
+      image_tag: ${{ github.sha }}
+    secrets: inherit # Pass down all necessary GCP secrets
+
+  # Deploy to Production on pushes to the 'main' branch
+  deploy-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci-checks, security-scans]
+    uses: ./.github/workflows/reusable-build-deploy.yml
+    name: Build and Deploy to Production
+    with:
+      environment: production
+      image_tag: ${{ github.sha }}
+    secrets: inherit
