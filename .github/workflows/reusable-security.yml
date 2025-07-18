@@ -8,8 +8,9 @@ on:
     secrets:
       GITLEAKS_LICENSE:
         required: false
-      GITHUB_TOKEN:
+      GH_TOKEN: # Use a non-reserved name for the token
         required: true
+  workflow_dispatch: # Allow manual runs
 
 env:
   PYTHON_VERSION: '3.11'
@@ -18,6 +19,9 @@ jobs:
   security-analysis:
     runs-on: ubuntu-latest
     name: Security Analysis (${{ matrix.scan-type }})
+    # Map the passed-in secret to the GITHUB_TOKEN env var for tools like checkout
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
     strategy:
       matrix:
         scan-type: [secrets, bandit, safety, semgrep]
@@ -52,7 +56,7 @@ jobs:
       if: matrix.scan-type == 'secrets'
       uses: gitleaks/gitleaks-action@v2
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The GITHUB_TOKEN is already in the job's environment from the job-level env mapping
         GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
     - name: Upload Security Reports

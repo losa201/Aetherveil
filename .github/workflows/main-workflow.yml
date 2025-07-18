@@ -8,6 +8,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch: # Allow manual runs
 
 jobs:
   # Run CI checks (quality, unit tests) on all pushes and PRs
@@ -20,7 +21,10 @@ jobs:
   security-scans:
     uses: ./.github/workflows/reusable-security.yml
     name: Security Analysis
-    secrets: inherit # Pass down secrets like GITHUB_TOKEN
+    # Explicitly pass secrets to the reusable workflow for better security
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   # Deploy to Staging on pushes to the 'develop' branch
   deploy-staging:
