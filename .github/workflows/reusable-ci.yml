@@ -5,9 +5,6 @@ name: Reusable CI
 
 on:
   workflow_call:
-    secrets:
-      CODECOV_TOKEN:
-        required: false
 
 env:
   PYTHON_VERSION: '3.11'
@@ -32,11 +29,13 @@ jobs:
         isort --check-only --diff .
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Run MyPy (Type Checking)
-      run: mypy .
+      run: mypy agents api config coordinator knowledge_graph modules rl_agent scripts tests
 
   unit-tests:
     runs-on: ubuntu-latest
     name: Unit Tests (Python ${{ matrix.python-version }})
+    permissions:
+      id-token: write # For Codecov OIDC
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
@@ -75,7 +74,7 @@ jobs:
         timeout 60 bash -c 'until redis-cli -h localhost ping > /dev/null 2>&1; do sleep 2; done'
         timeout 60 bash -c 'until python -c "from neo4j import GraphDatabase; d = GraphDatabase.driver(\"bolt://localhost:7687\", auth=(\"neo4j\", \"testpassword\")); d.verify_connectivity(); d.close()"; do sleep 2; done'
     - name: Run Unit Tests
-      run: pytest tests/unit/ -v --cov=aetherveil_sentinel --cov-report=xml
+      run: pytest tests/unit/ -v --cov=aetherveil --cov-report=xml
       env:
         REDIS_URL: redis://localhost:6379
         NEO4J_URI: bolt://localhost:7687
@@ -86,4 +85,4 @@ jobs:
       with:
         file: ./coverage.xml
         fail_ci_if_error: true
-      token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ secrets.CODECOV_TOKEN }}

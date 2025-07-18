@@ -16,55 +16,48 @@ env:
   PYTHON_VERSION: '3.11'
 
 jobs:
-  security-analysis:
+  secrets-scan:
     runs-on: ubuntu-latest
-    name: Security Analysis (${{ matrix.scan-type }})
-    # Map the passed-in secret to the GITHUB_TOKEN env var for tools like checkout
+    name: Secrets Scan
     env:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-    strategy:
-      matrix:
-        scan-type: [secrets, bandit, safety, semgrep]
-      fail-fast: false
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Required for Gitleaks
+    - name: Run Gitleaks Secret Scan
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+  code-scans:
+    runs-on: ubuntu-latest
+    name: Code Analysis (${{ matrix.scan-type }})
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+    strategy:
+      matrix:
+        scan-type: [bandit, safety, semgrep]
+      fail-fast: false
+    steps:
+    - uses: actions/checkout@v4
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install security tools
-      if: matrix.scan-type != 'secrets'
-      run: pip install bandit safety semgrep
-
-    - name: Run Bandit Security Scan
-      if: matrix.scan-type == 'bandit'
-      run: bandit -r . -f json -o bandit-report.json || true
-
-    - name: Run Safety Check
-      if: matrix.scan-type == 'safety'
-      run: safety check --json --output safety-report.json || true
-
-    - name: Run Semgrep
-      if: matrix.scan-type == 'semgrep'
-      run: semgrep --config=auto --json --output=semgrep-report.json .
-
-    - name: Run Gitleaks Secret Scan
-      if: matrix.scan-type == 'secrets'
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        # The GITHUB_TOKEN is already in the job's environment from the job-level env mapping
-        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-
-    - name: Upload Security Reports
+    - name: Install ${{ matrix.scan-type }}
+      run: pip install ${{ matrix.scan-type }}
+    - name: Run ${{ matrix.scan-type }}
+      run: |
+        if [ "${{ matrix.scan-type }}" = "bandit" ]; then
+          bandit -r . -f json -o bandit-report.json
+        elif [ "${{ matrix.scan-type }}" = "safety" ]; then
+          safety check --json --output safety-report.json
+        elif [ "${{ matrix.scan-type }}" = "semgrep" ]; then
+          semgrep --config=auto --json --output=semgrep-report.json .
+        fi
+    - name: Upload Security Report
       uses: actions/upload-artifact@v4
       with:
-        name: security-reports-${{ matrix.scan-type }}
-        path: |
-          bandit-report.json
-          safety-report.json
-          semgrep-report.json
-        if-no-files-found: ignore
+        name: ${{ matrix.scan-type }}-report
+        path: ${{ matrix.scan-type }}-report.json
