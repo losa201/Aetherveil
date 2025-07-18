@@ -1,0 +1,163 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coordinator
+spec:
+  replicas: {{ .Values.coordinator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aetherveil-sentinel.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: coordinator
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/coordinator/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/coordinator/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "aetherveil-sentinel.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: coordinator
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "aetherveil-sentinel.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.common.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: wait-for-redis
+          image: redis:7-alpine
+          command: ['sh', '-c', 'until redis-cli -h {{ .Values.coordinator.config.redis.host }} -p {{ .Values.coordinator.config.redis.port }} ping; do echo waiting for redis; sleep 2; done;']
+        - name: wait-for-postgres
+          image: postgres:15-alpine
+          command: ['sh', '-c', 'until pg_isready -h {{ .Values.coordinator.config.database.host }} -p {{ .Values.coordinator.config.database.port }} -U {{ .Values.coordinator.config.database.user }}; do echo waiting for postgres; sleep 2; done;']
+      containers:
+        - name: coordinator
+          securityContext:
+            {{- toYaml .Values.common.securityContext | nindent 12 }}
+          image: "{{ .Values.common.image.registry }}/{{ .Values.coordinator.image.repository }}:{{ .Values.coordinator.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.common.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.coordinator.service.targetPort }}
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.coordinator.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.coordinator.readinessProbe | nindent 12 }}
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: LOG_LEVEL
+              value: {{ .Values.common.env.LOG_LEVEL }}
+            - name: PYTHONUNBUFFERED
+              value: {{ .Values.common.env.PYTHONUNBUFFERED | quote }}
+            - name: DATABASE_HOST
+              value: {{ .Values.coordinator.config.database.host }}
+            - name: DATABASE_PORT
+              value: {{ .Values.coordinator.config.database.port | quote }}
+            - name: DATABASE_NAME
+              value: {{ .Values.coordinator.config.database.name }}
+            - name: DATABASE_USER
+              value: {{ .Values.coordinator.config.database.user }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-secret
+                  key: database-password
+            - name: REDIS_HOST
+              value: {{ .Values.coordinator.config.redis.host }}
+            - name: REDIS_PORT
+              value: {{ .Values.coordinator.config.redis.port | quote }}
+            - name: REDIS_DATABASE
+              value: {{ .Values.coordinator.config.redis.database | quote }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-secret
+                  key: redis-password
+            - name: CLUSTER_NODE_ID
+              value: {{ .Values.coordinator.config.cluster.nodeId }}
+            - name: ELECTION_TIMEOUT
+              value: {{ .Values.coordinator.config.cluster.electionTimeout | quote }}
+            - name: HEARTBEAT_INTERVAL
+              value: {{ .Values.coordinator.config.cluster.heartbeatInterval | quote }}
+            - name: ENABLE_TLS
+              value: {{ .Values.coordinator.config.security.enableTLS | quote }}
+            {{- if .Values.coordinator.config.security.certificateManager.enabled }}
+            - name: CERTIFICATE_MANAGER_ENABLED
+              value: "true"
+            - name: CERTIFICATE_ISSUER
+              value: {{ .Values.coordinator.config.security.certificateManager.issuer }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-config
+          resources:
+            {{- toYaml .Values.common.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: secrets
+              mountPath: /app/secrets
+              readOnly: true
+            - name: certificates
+              mountPath: /app/certs
+              readOnly: true
+            - name: logs
+              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-config
+        - name: secrets
+          secret:
+            secretName: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-secret
+        - name: certificates
+          secret:
+            secretName: {{ include "aetherveil-sentinel.fullname" . }}-certificates
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.coordinator.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-data
+        {{- else }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.common.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.common.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.common.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

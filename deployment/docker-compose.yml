@@ -1,0 +1,269 @@
+# Docker Compose for Aetherveil Sentinel Swarm
+version: '3.8'
+
+services:
+  # Coordinator service
+  coordinator:
+    build:
+      context: .
+      dockerfile: deployment/docker/coordinator/Dockerfile
+    container_name: aetherveil-coordinator
+    ports:
+      - "8000:8000"
+      - "5555:5555"
+      - "5556:5556"
+      - "50051:50051"
+    environment:
+      - PYTHONPATH=/app
+      - COORDINATOR_HOST=0.0.0.0
+      - COORDINATOR_PORT=8000
+      - ZMQ_PORT=5555
+      - GRPC_PORT=50051
+      - DATABASE_URL=sqlite:///app/data/aetherveil.db
+      - REDIS_URL=redis://redis:6379/0
+      - NEO4J_URI=bolt://neo4j:7687
+    volumes:
+      - ./data/coordinator:/app/data
+      - ./logs/coordinator:/app/logs
+      - ./config:/app/config
+    depends_on:
+      - redis
+      - neo4j
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis service
+  redis:
+    image: redis:7-alpine
+    container_name: aetherveil-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Neo4j service
+  neo4j:
+    image: neo4j:5-community
+    container_name: aetherveil-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/aetherveil123
+      - NEO4J_dbms_default__database=aetherveil
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "aetherveil123", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Reconnaissance agents
+  reconnaissance-1:
+    build:
+      context: .
+      dockerfile: deployment/docker/reconnaissance/Dockerfile
+    container_name: aetherveil-recon-1
+    environment:
+      - AGENT_ID=recon-1
+      - AGENT_TYPE=reconnaissance
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+    volumes:
+      - ./data/agents/recon-1:/app/data
+      - ./logs/agents/recon-1:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  reconnaissance-2:
+    build:
+      context: .
+      dockerfile: deployment/docker/reconnaissance/Dockerfile
+    container_name: aetherveil-recon-2
+    environment:
+      - AGENT_ID=recon-2
+      - AGENT_TYPE=reconnaissance
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+    volumes:
+      - ./data/agents/recon-2:/app/data
+      - ./logs/agents/recon-2:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Scanner agents
+  scanner-1:
+    build:
+      context: .
+      dockerfile: deployment/docker/scanner/Dockerfile
+    container_name: aetherveil-scanner-1
+    environment:
+      - AGENT_ID=scanner-1
+      - AGENT_TYPE=scanner
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+    volumes:
+      - ./data/agents/scanner-1:/app/data
+      - ./logs/agents/scanner-1:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Exploiter agents
+  exploiter-1:
+    build:
+      context: .
+      dockerfile: deployment/docker/exploiter/Dockerfile
+    container_name: aetherveil-exploiter-1
+    environment:
+      - AGENT_ID=exploiter-1
+      - AGENT_TYPE=exploiter
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+      - AGENT_SANDBOX=true
+    volumes:
+      - ./data/agents/exploiter-1:/app/data
+      - ./logs/agents/exploiter-1:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+      - apparmor:unconfined
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # OSINT agents
+  osint-1:
+    build:
+      context: .
+      dockerfile: deployment/docker/osint/Dockerfile
+    container_name: aetherveil-osint-1
+    environment:
+      - AGENT_ID=osint-1
+      - AGENT_TYPE=osint
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+    volumes:
+      - ./data/agents/osint-1:/app/data
+      - ./logs/agents/osint-1:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Stealth agents
+  stealth-1:
+    build:
+      context: .
+      dockerfile: deployment/docker/stealth/Dockerfile
+    container_name: aetherveil-stealth-1
+    environment:
+      - AGENT_ID=stealth-1
+      - AGENT_TYPE=stealth
+      - COORDINATOR_HOST=coordinator
+      - ZMQ_PORT=5555
+    volumes:
+      - ./data/agents/stealth-1:/app/data
+      - ./logs/agents/stealth-1:/app/logs
+    depends_on:
+      - coordinator
+    networks:
+      - aetherveil-network
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+networks:
+  aetherveil-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:

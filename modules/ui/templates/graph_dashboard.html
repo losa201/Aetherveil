@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aetherveil Sentinel - Threat Intelligence Dashboard</title>
+    
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #ffffff;
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden;
+        }
+        
+        .navbar {
+            background-color: #1a1a1a;
+            border-bottom: 2px solid #00ff00;
+        }
+        
+        .navbar-brand {
+            color: #00ff00 !important;
+            font-weight: bold;
+        }
+        
+        .sidebar {
+            background-color: #111111;
+            height: 100vh;
+            padding: 20px;
+            border-right: 2px solid #333333;
+        }
+        
+        .main-content {
+            background-color: #0a0a0a;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .graph-container {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 600px;
+        }
+        
+        .analytics-panel {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .threat-node {
+            cursor: pointer;
+            stroke-width: 2px;
+        }
+        
+        .threat-node:hover {
+            stroke: #00ff00;
+            stroke-width: 3px;
+        }
+        
+        .threat-link {
+            stroke-width: 1.5px;
+            opacity: 0.8;
+        }
+        
+        .threat-link:hover {
+            opacity: 1;
+            stroke-width: 2px;
+        }
+        
+        .node-label {
+            font-size: 12px;
+            fill: #ffffff;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        
+        .search-container {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .search-input {
+            background-color: #0a0a0a;
+            border: 1px solid #333333;
+            color: #ffffff;
+            border-radius: 5px;
+            padding: 10px;
+            width: 100%;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #00ff00;
+        }
+        
+        .search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #0a0a0a;
+            border: 1px solid #333333;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .search-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #333333;
+            cursor: pointer;
+        }
+        
+        .search-result-item:hover {
+            background-color: #1a1a1a;
+        }
+        
+        .controls-panel {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .btn-primary {
+            background-color: #00ff00;
+            border-color: #00ff00;
+            color: #000000;
+        }
+        
+        .btn-primary:hover {
+            background-color: #00cc00;
+            border-color: #00cc00;
+        }
+        
+        .btn-danger {
+            background-color: #ff0000;
+            border-color: #ff0000;
+        }
+        
+        .btn-warning {
+            background-color: #ffaa00;
+            border-color: #ffaa00;
+            color: #000000;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .status-online {
+            background-color: #00ff00;
+        }
+        
+        .status-offline {
+            background-color: #ff0000;
+        }
+        
+        .status-warning {
+            background-color: #ffaa00;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #ffffff;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #333333;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .legend {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-card {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00ff00;
+        }
+        
+        .metric-label {
+            font-size: 0.9em;
+            color: #cccccc;
+        }
+        
+        .anomaly-alert {
+            background-color: #330000;
+            border: 2px solid #ff0000;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .hotspot-item {
+            background-color: #1a1a1a;
+            border: 1px solid #333333;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        
+        .hotspot-item:hover {
+            background-color: #2a2a2a;
+        }
+        
+        .risk-high {
+            border-left: 4px solid #ff0000;
+        }
+        
+        .risk-medium {
+            border-left: 4px solid #ffaa00;
+        }
+        
+        .risk-low {
+            border-left: 4px solid #00ff00;
+        }
+        
+        .minimap {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333333;
+            border-radius: 5px;
+        }
+        
+        .zoom-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333333;
+            color: #ffffff;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .zoom-btn:hover {
+            background-color: rgba(0, 255, 0, 0.2);
+        }
+        
+        .timeline {
+            background-color: #1a1a1a;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            height: 200px;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #1a1a1a;
+            border: 2px solid #00ff00;
+            border-radius: 10px;
+            padding: 15px;
+            max-width: 300px;
+            z-index: 1001;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+        }
+        
+        .spinner {
+            border: 4px solid #333333;
+            border-top: 4px solid #00ff00;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#"><i class="fas fa-shield-alt"></i> Aetherveil Sentinel</a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text">
+                    <span class="status-indicator status-online"></span>
+                    Connected
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 sidebar">
+                <!-- Search Panel -->
+                <div class="search-container">
+                    <h5><i class="fas fa-search"></i> Search Threats</h5>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search nodes, IPs, domains...">
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+
+                <!-- Controls Panel -->
+                <div class="controls-panel">
+                    <h5><i class="fas fa-sliders-h"></i> Controls</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Layout Algorithm</label>
+                        <select class="form-select" id="layoutSelect">
+                            <option value="force">Force-Directed</option>
+                            <option value="hierarchical">Hierarchical</option>
+                            <option value="circular">Circular</option>
+                            <option value="tree">Tree</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Node Size</label>
+                        <input type="range" class="form-range" id="nodeSizeSlider" min="1" max="10" value="5">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Edge Thickness</label>
+                        <input type="range" class="form-range" id="edgeThicknessSlider" min="1" max="10" value="5">
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="showLabels" checked>
+                            <label class="form-check-label" for="showLabels">Show Labels</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="animateLayout" checked>
+                            <label class="form-check-label" for="animateLayout">Animate Layout</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend">
+                    <h5><i class="fas fa-palette"></i> Legend</h5>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff0000;"></div>
+                        <span>Critical Risk (8-10)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff6600;"></div>
+                        <span>High Risk (6-8)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffcc00;"></div>
+                        <span>Medium Risk (3-6)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #1f77b4;"></div>
+                        <span>Low Risk (0-3)</span>
+                    </div>
+                </div>
+
+                <!-- Threat Hotspots -->
+                <div class="analytics-panel">
+                    <h5><i class="fas fa-fire"></i> Threat Hotspots</h5>
+                    <div id="hotspotsList"></div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 main-content">
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="nodeCount">0</div>
+                        <div class="metric-label">Nodes</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="edgeCount">0</div>
+                        <div class="metric-label">Connections</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="criticalThreats">0</div>
+                        <div class="metric-label">Critical Threats</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="activeAlerts">0</div>
+                        <div class="metric-label">Active Alerts</div>
+                    </div>
+                </div>
+
+                <!-- Anomaly Alerts -->
+                <div id="anomalyAlerts"></div>
+
+                <!-- Main Graph -->
+                <div class="graph-container">
+                    <div id="graphVisualization">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Zoom Controls -->
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" id="zoomIn"><i class="fas fa-plus"></i></button>
+                        <button class="zoom-btn" id="zoomOut"><i class="fas fa-minus"></i></button>
+                        <button class="zoom-btn" id="resetZoom"><i class="fas fa-home"></i></button>
+                    </div>
+                    
+                    <!-- Minimap -->
+                    <div class="minimap">
+                        <svg id="minimapSvg" width="100%" height="100%"></svg>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="timeline">
+                    <h5><i class="fas fa-clock"></i> Activity Timeline</h5>
+                    <canvas id="timelineChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        // Global variables
+        let socket;
+        let svg, g, simulation;
+        let nodes = [], links = [];
+        let width = 800, height = 600;
+        let transform = d3.zoomIdentity;
+        let currentCenterNode = null;
+        let tooltip = d3.select("#tooltip");
+        let timelineChart;
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            initializeGraph();
+            initializeControls();
+            initializeTimeline();
+            loadInitialData();
+        });
+        
+        // WebSocket connection
+        function initializeWebSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                updateConnectionStatus(true);
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                updateConnectionStatus(false);
+            });
+            
+            socket.on('node_update', function(data) {
+                updateNode(data);
+            });
+            
+            socket.on('edge_update', function(data) {
+                updateEdge(data);
+            });
+            
+            socket.on('analytics_update', function(data) {
+                updateAnalytics(data);
+            });
+            
+            socket.on('anomalies_update', function(data) {
+                updateAnomalies(data);
+            });
+            
+            socket.on('correlations_update', function(data) {
+                updateCorrelations(data);
+            });
+        }
+        
+        // Initialize D3.js graph
+        function initializeGraph() {
+            const container = d3.select("#graphVisualization");
+            container.select(".loading").remove();
+            
+            width = container.node().getBoundingClientRect().width - 40;
+            height = container.node().getBoundingClientRect().height - 40;
+            
+            svg = container.append("svg")
+                .attr("width", width)
+                .attr("height", height);
+            
+            // Define arrow markers
+            svg.append("defs").selectAll("marker")
+                .data(["end"])
+                .enter().append("marker")
+                .attr("id", String)
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 20)
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .style("fill", "#999");
+            
+            g = svg.append("g");
+            
+            // Zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 10])
+                .on("zoom", function(event) {
+                    transform = event.transform;
+                    g.attr("transform", transform);
+                    updateMinimap();
+                });
+            
+            svg.call(zoom);
+            
+            // Initialize force simulation
+            simulation = d3.forceSimulation()
+                .force("link", d3.forceLink().id(d => d.id).distance(80))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collision", d3.forceCollide().radius(25));
+            
+            // Zoom controls
+            d3.select("#zoomIn").on("click", () => {
+                svg.transition().call(zoom.scaleBy, 1.5);
+            });
+            
+            d3.select("#zoomOut").on("click", () => {
+                svg.transition().call(zoom.scaleBy, 1 / 1.5);
+            });
+            
+            d3.select("#resetZoom").on("click", () => {
+                svg.transition().call(zoom.transform, d3.zoomIdentity);
+            });
+        }
+        
+        // Initialize controls
+        function initializeControls() {
+            // Layout algorithm selector
+            d3.select("#layoutSelect").on("change", function() {
+                const layout = this.value;
+                applyLayout(layout);
+            });
+            
+            // Node size slider
+            d3.select("#nodeSizeSlider").on("input", function() {
+                const scale = this.value;
+                updateNodeSizes(scale);
+            });
+            
+            // Edge thickness slider
+            d3.select("#edgeThicknessSlider").on("input", function() {
+                const scale = this.value;
+                updateEdgeThickness(scale);
+            });
+            
+            // Show labels checkbox
+            d3.select("#showLabels").on("change", function() {
+                const show = this.checked;
+                toggleLabels(show);
+            });
+            
+            // Animate layout checkbox
+            d3.select("#animateLayout").on("change", function() {
+                const animate = this.checked;
+                toggleAnimation(animate);
+            });
+            
+            // Search input
+            d3.select("#searchInput").on("input", function() {
+                const query = this.value;
+                if (query.length > 2) {
+                    searchNodes(query);
+                } else {
+                    clearSearchResults();
+                }
+            });
+        }
+        
+        // Initialize timeline chart
+        function initializeTimeline() {
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+            timelineChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Nodes Created',
+                        data: [],
+                        borderColor: '#00ff00',
+                        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Edges Created',
+                        data: [],
+                        borderColor: '#0066cc',
+                        backgroundColor: 'rgba(0, 102, 204, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: '#333333'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#ffffff'
+                            },
+                            grid: {
+                                color: '#333333'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load initial data
+        function loadInitialData() {
+            fetch('/api/graph/analytics')
+                .then(response => response.json())
+                .then(data => {
+                    updateAnalytics(data);
+                })
+                .catch(error => {
+                    console.error('Error loading analytics:', error);
+                });
+            
+            // Load a sample subgraph
+            loadSubgraph('host_1');
+        }
+        
+        // Load subgraph centered on a node
+        function loadSubgraph(nodeId, radius = 2) {
+            fetch(`/api/graph/visualization/${nodeId}?radius=${radius}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateGraph(data);
+                    currentCenterNode = nodeId;
+                })
+                .catch(error => {
+                    console.error('Error loading subgraph:', error);
+                });
+        }
+        
+        // Update graph visualization
+        function updateGraph(data) {
+            nodes = data.nodes || [];
+            links = data.links || [];
+            
+            // Update simulation
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+            
+            // Update visual elements
+            updateLinks();
+            updateNodes();
+            
+            // Restart simulation
+            simulation.alpha(1).restart();
+        }
+        
+        // Update links
+        function updateLinks() {
+            const link = g.selectAll(".threat-link")
+                .data(links, d => d.id);
+            
+            link.exit().remove();
+            
+            const linkEnter = link.enter().append("line")
+                .attr("class", "threat-link")
+                .attr("marker-end", "url(#end)")
+                .style("stroke", d => d.color || "#999")
+                .style("stroke-width", d => Math.sqrt(d.weight) * 2)
+                .on("mouseover", showLinkTooltip)
+                .on("mouseout", hideTooltip);
+            
+            linkEnter.merge(link);
+            
+            simulation.on("tick", () => {
+                g.selectAll(".threat-link")
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+            });
+        }
+        
+        // Update nodes
+        function updateNodes() {
+            const node = g.selectAll(".threat-node")
+                .data(nodes, d => d.id);
+            
+            node.exit().remove();
+            
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "threat-node")
+                .call(d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended));
+            
+            nodeEnter.append("circle")
+                .attr("r", d => d.size || 10)
+                .style("fill", d => d.color || "#1f77b4")
+                .style("stroke", d => getRiskColor(d.risk_score))
+                .style("stroke-width", 2);
+            
+            nodeEnter.append("text")
+                .attr("class", "node-label")
+                .attr("dy", ".35em")
+                .text(d => d.label)
+                .style("font-size", "10px")
+                .style("pointer-events", "none");
+            
+            nodeEnter
+                .on("mouseover", showNodeTooltip)
+                .on("mouseout", hideTooltip)
+                .on("click", nodeClicked)
+                .on("dblclick", nodeDoubleClicked);
+            
+            simulation.on("tick", () => {
+                g.selectAll(".threat-node")
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+            });
+        }
+        
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // Node interaction handlers
+        function nodeClicked(event, d) {
+            // Subscribe to node updates
+            socket.emit('subscribe_node', {node_id: d.id});
+            
+            // Highlight node and connections
+            highlightNode(d);
+            
+            // Show detailed info
+            showNodeDetails(d);
+        }
+        
+        function nodeDoubleClicked(event, d) {
+            // Load subgraph centered on this node
+            loadSubgraph(d.id);
+        }
+        
+        // Tooltip functions
+        function showNodeTooltip(event, d) {
+            tooltip.style("display", "block")
+                .html(`
+                    <strong>${d.label}</strong><br/>
+                    <strong>Type:</strong> ${d.type}<br/>
+                    <strong>Risk Score:</strong> ${d.risk_score.toFixed(2)}<br/>
+                    <strong>Confidence:</strong> ${(d.confidence * 100).toFixed(1)}%<br/>
+                    <strong>Connections:</strong> ${d.connections ? d.connections.length : 0}<br/>
+                    <strong>Properties:</strong><br/>
+                    ${Object.entries(d.properties || {}).map(([k, v]) => `${k}: ${v}`).join('<br/>')}
+                `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY + 10) + "px");
+        }
+        
+        function showLinkTooltip(event, d) {
+            tooltip.style("display", "block")
+                .html(`
+                    <strong>Connection</strong><br/>
+                    <strong>Type:</strong> ${d.type}<br/>
+                    <strong>Weight:</strong> ${d.weight.toFixed(2)}<br/>
+                    <strong>Properties:</strong><br/>
+                    ${Object.entries(d.properties || {}).map(([k, v]) => `${k}: ${v}`).join('<br/>')}
+                `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY + 10) + "px");
+        }
+        
+        function hideTooltip() {
+            tooltip.style("display", "none");
+        }
+        
+        // Highlight node and connections
+        function highlightNode(targetNode) {
+            // Reset all styles
+            g.selectAll(".threat-node circle")
+                .style("opacity", 0.3);
+            g.selectAll(".threat-link")
+                .style("opacity", 0.1);
+            
+            // Highlight target node
+            g.selectAll(".threat-node")
+                .filter(d => d.id === targetNode.id)
+                .select("circle")
+                .style("opacity", 1);
+            
+            // Highlight connected nodes and links
+            const connectedNodes = new Set();
+            links.forEach(link => {
+                if (link.source.id === targetNode.id || link.target.id === targetNode.id) {
+                    connectedNodes.add(link.source.id);
+                    connectedNodes.add(link.target.id);
+                    
+                    // Highlight link
+                    g.selectAll(".threat-link")
+                        .filter(d => d.id === link.id)
+                        .style("opacity", 1);
+                }
+            });
+            
+            // Highlight connected nodes
+            g.selectAll(".threat-node")
+                .filter(d => connectedNodes.has(d.id))
+                .select("circle")
+                .style("opacity", 1);
+        }
+        
+        // Search nodes
+        function searchNodes(query) {
+            fetch(`/api/graph/search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(results => {
+                    displaySearchResults(results);
+                })
+                .catch(error => {
+                    console.error('Error searching nodes:', error);
+                });
+        }
+        
+        function displaySearchResults(results) {
+            const container = d3.select("#searchResults");
+            container.selectAll("*").remove();
+            
+            results.forEach(result => {
+                const item = container.append("div")
+                    .attr("class", "search-result-item")
+                    .on("click", () => {
+                        loadSubgraph(result.id);
+                        clearSearchResults();
+                    });
+                
+                item.append("div")
+                    .style("font-weight", "bold")
+                    .text(result.label);
+                
+                item.append("div")
+                    .style("font-size", "0.9em")
+                    .style("color", "#cccccc")
+                    .text(`${result.type} | Risk: ${result.risk_score.toFixed(2)}`);
+            });
+        }
+        
+        function clearSearchResults() {
+            d3.select("#searchResults").selectAll("*").remove();
+        }
+        
+        // Update analytics
+        function updateAnalytics(data) {
+            // Update metrics
+            d3.select("#nodeCount").text(data.node_count || 0);
+            d3.select("#edgeCount").text(data.edge_count || 0);
+            
+            // Count critical threats
+            const criticalCount = Object.values(data.risk_distribution || {})
+                .reduce((sum, count, index) => {
+                    return index === 3 ? sum + count : sum; // Critical is index 3
+                }, 0);
+            d3.select("#criticalThreats").text(criticalCount);
+            
+            // Update hotspots
+            updateHotspots(data.threat_hotspots || []);
+            
+            // Update timeline
+            updateTimelineData(data.temporal_analysis || {});
+        }
+        
+        // Update hotspots
+        function updateHotspots(hotspots) {
+            const container = d3.select("#hotspotsList");
+            container.selectAll("*").remove();
+            
+            hotspots.slice(0, 10).forEach(hotspot => {
+                const item = container.append("div")
+                    .attr("class", `hotspot-item ${getRiskClass(hotspot.risk_score)}`)
+                    .on("click", () => loadSubgraph(hotspot.node_id));
+                
+                item.append("div")
+                    .style("font-weight", "bold")
+                    .text(hotspot.label);
+                
+                item.append("div")
+                    .style("font-size", "0.9em")
+                    .text(`Risk: ${hotspot.risk_score.toFixed(2)} | Connections: ${hotspot.connectivity}`);
+            });
+        }
+        
+        // Update anomalies
+        function updateAnomalies(anomalies) {
+            const container = d3.select("#anomalyAlerts");
+            container.selectAll("*").remove();
+            
+            anomalies.forEach(anomaly => {
+                const alert = container.append("div")
+                    .attr("class", "anomaly-alert");
+                
+                alert.append("h6")
+                    .html(`<i class="fas fa-exclamation-triangle"></i> ${anomaly.type}`);
+                
+                alert.append("p")
+                    .text(anomaly.description);
+                
+                alert.append("small")
+                    .text(`Severity: ${anomaly.severity}`);
+            });
+        }
+        
+        // Update timeline data
+        function updateTimelineData(temporalData) {
+            if (!temporalData.node_timeline) return;
+            
+            const dates = Object.keys(temporalData.node_timeline).sort();
+            const nodeData = dates.map(date => temporalData.node_timeline[date]);
+            const edgeData = dates.map(date => temporalData.edge_timeline[date] || 0);
+            
+            timelineChart.data.labels = dates;
+            timelineChart.data.datasets[0].data = nodeData;
+            timelineChart.data.datasets[1].data = edgeData;
+            timelineChart.update();
+        }
+        
+        // Utility functions
+        function getRiskColor(riskScore) {
+            if (riskScore >= 8) return "#ff0000";
+            if (riskScore >= 6) return "#ff6600";
+            if (riskScore >= 3) return "#ffcc00";
+            return "#00ff00";
+        }
+        
+        function getRiskClass(riskScore) {
+            if (riskScore >= 6) return "risk-high";
+            if (riskScore >= 3) return "risk-medium";
+            return "risk-low";
+        }
+        
+        function updateConnectionStatus(connected) {
+            const indicator = document.querySelector('.status-indicator');
+            const text = document.querySelector('.navbar-text');
+            
+            if (connected) {
+                indicator.className = 'status-indicator status-online';
+                text.innerHTML = '<span class="status-indicator status-online"></span>Connected';
+            } else {
+                indicator.className = 'status-indicator status-offline';
+                text.innerHTML = '<span class="status-indicator status-offline"></span>Disconnected';
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = d3.select("body").append("div")
+                .attr("class", "notification")
+                .style("border-color", type === 'error' ? '#ff0000' : '#00ff00');
+            
+            notification.append("div")
+                .text(message);
+            
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // Layout algorithms
+        function applyLayout(layoutType) {
+            switch(layoutType) {
+                case 'hierarchical':
+                    applyHierarchicalLayout();
+                    break;
+                case 'circular':
+                    applyCircularLayout();
+                    break;
+                case 'tree':
+                    applyTreeLayout();
+                    break;
+                default:
+                    applyForceLayout();
+            }
+        }
+        
+        function applyForceLayout() {
+            simulation
+                .force("link", d3.forceLink().id(d => d.id).distance(80))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .alpha(1).restart();
+        }
+        
+        function applyHierarchicalLayout() {
+            // Implement hierarchical layout
+            const levels = {};
+            nodes.forEach(node => {
+                levels[node.id] = calculateNodeLevel(node);
+            });
+            
+            const maxLevel = Math.max(...Object.values(levels));
+            nodes.forEach(node => {
+                node.fx = (levels[node.id] / maxLevel) * width;
+                node.fy = Math.random() * height;
+            });
+            
+            simulation.alpha(1).restart();
+        }
+        
+        function applyCircularLayout() {
+            const radius = Math.min(width, height) / 3;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            nodes.forEach((node, i) => {
+                const angle = (i / nodes.length) * 2 * Math.PI;
+                node.fx = centerX + radius * Math.cos(angle);
+                node.fy = centerY + radius * Math.sin(angle);
+            });
+            
+            simulation.alpha(1).restart();
+        }
+        
+        function applyTreeLayout() {
+            // Implement tree layout using d3.tree
+            const root = d3.hierarchy({children: nodes});
+            const treeLayout = d3.tree().size([width, height]);
+            treeLayout(root);
+            
+            root.descendants().forEach((d, i) => {
+                if (nodes[i]) {
+                    nodes[i].fx = d.x;
+                    nodes[i].fy = d.y;
+                }
+            });
+            
+            simulation.alpha(1).restart();
+        }
+        
+        function calculateNodeLevel(node) {
+            // Calculate hierarchical level based on node type and connections
+            const typeWeights = {
+                'threat_actor': 0,
+                'campaign': 1,
+                'technique': 2,
+                'vulnerability': 3,
+                'host': 4,
+                'indicator': 5
+            };
+            
+            return typeWeights[node.type] || 3;
+        }
+        
+        // Control functions
+        function updateNodeSizes(scale) {
+            g.selectAll(".threat-node circle")
+                .attr("r", d => (d.size || 10) * scale / 5);
+        }
+        
+        function updateEdgeThickness(scale) {
+            g.selectAll(".threat-link")
+                .style("stroke-width", d => Math.sqrt(d.weight) * scale / 2.5);
+        }
+        
+        function toggleLabels(show) {
+            g.selectAll(".node-label")
+                .style("display", show ? "block" : "none");
+        }
+        
+        function toggleAnimation(animate) {
+            if (animate) {
+                simulation.alpha(1).restart();
+            } else {
+                simulation.alpha(0);
+            }
+        }
+        
+        // Minimap functions
+        function updateMinimap() {
+            // Update minimap based on current zoom and pan
+            const minimap = d3.select("#minimapSvg");
+            minimap.selectAll("*").remove();
+            
+            const scale = 0.2;
+            const mini = minimap.append("g")
+                .attr("transform", `scale(${scale})`);
+            
+            // Draw simplified version of main graph
+            mini.selectAll("line")
+                .data(links)
+                .enter().append("line")
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y)
+                .style("stroke", "#666")
+                .style("stroke-width", 0.5);
+            
+            mini.selectAll("circle")
+                .data(nodes)
+                .enter().append("circle")
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y)
+                .attr("r", 2)
+                .style("fill", d => d.color);
+            
+            // Show current view area
+            const viewX = -transform.x / transform.k;
+            const viewY = -transform.y / transform.k;
+            const viewWidth = width / transform.k;
+            const viewHeight = height / transform.k;
+            
+            mini.append("rect")
+                .attr("x", viewX)
+                .attr("y", viewY)
+                .attr("width", viewWidth)
+                .attr("height", viewHeight)
+                .style("fill", "none")
+                .style("stroke", "#00ff00")
+                .style("stroke-width", 2);
+        }
+        
+        // Node details panel
+        function showNodeDetails(node) {
+            // This would show a detailed panel with node information
+            console.log('Show details for node:', node);
+        }
+        
+        // Real-time updates
+        function updateNode(nodeData) {
+            // Update existing node or add new one
+            const existingIndex = nodes.findIndex(n => n.id === nodeData.id);
+            if (existingIndex >= 0) {
+                nodes[existingIndex] = nodeData;
+            } else {
+                nodes.push(nodeData);
+            }
+            
+            // Update visualization
+            updateNodes();
+            simulation.alpha(1).restart();
+        }
+        
+        function updateEdge(edgeData) {
+            // Update existing edge or add new one
+            const existingIndex = links.findIndex(l => l.id === edgeData.id);
+            if (existingIndex >= 0) {
+                links[existingIndex] = edgeData;
+            } else {
+                links.push(edgeData);
+            }
+            
+            // Update visualization
+            updateLinks();
+            simulation.alpha(1).restart();
+        }
+        
+        // Window resize handler
+        window.addEventListener('resize', function() {
+            const container = d3.select("#graphVisualization");
+            const newWidth = container.node().getBoundingClientRect().width - 40;
+            const newHeight = container.node().getBoundingClientRect().height - 40;
+            
+            if (newWidth !== width || newHeight !== height) {
+                width = newWidth;
+                height = newHeight;
+                
+                svg.attr("width", width).attr("height", height);
+                simulation.force("center", d3.forceCenter(width / 2, height / 2));
+                simulation.alpha(1).restart();
+            }
+        });
+    </script>
+</body>
+</html>

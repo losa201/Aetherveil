@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package aetherveil_sentinel;
+
+// Service for the Coordinator to manage agents
+service Coordinator {
+    // Agent registration
+    rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+
+    // Agent sends heartbeat to coordinator
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+    // Coordinator sends task to agent
+    rpc AssignTask(TaskRequest) returns (TaskResponse);
+
+    // Agent sends task result to coordinator
+    rpc SendResult(TaskResult) returns (ResultResponse);
+}
+
+// Service for Agents to communicate with each other
+service Agent {
+    // Send a message to another agent
+    rpc SendMessage(AgentMessage) returns (AgentMessageResponse);
+}
+
+// -- Message Definitions --
+
+// Registration
+message RegisterAgentRequest {
+    string agent_id = 1;
+    repeated string capabilities = 2; // e.g., "scan", "exploit", "stealth"
+    string address = 3; // Agent's listening address
+}
+
+message RegisterAgentResponse {
+    bool success = 1;
+    string coordinator_id = 2;
+}
+
+// Heartbeat
+message HeartbeatRequest {
+    string agent_id = 1;
+    enum AgentStatus {
+        IDLE = 0;
+        BUSY = 1;
+        ERROR = 2;
+    }
+    AgentStatus status = 2;
+}
+
+message HeartbeatResponse {
+    bool acknowledged = 1;
+}
+
+// Task Management
+message TaskRequest {
+    string task_id = 1;
+    string module = 2; // e.g., "reconnaissance"
+    map<string, string> parameters = 3; // e.g., {"target": "10.0.0.1"}
+}
+
+message TaskResponse {
+    bool accepted = 1;
+}
+
+message TaskResult {
+    string task_id = 1;
+    string agent_id = 2;
+    bool success = 3;
+    string output = 4; // Can be JSON, raw text, etc.
+    string error_message = 5;
+}
+
+message ResultResponse {
+    bool received = 1;
+}
+
+// Inter-Agent Communication
+message AgentMessage {
+    string source_agent_id = 1;
+    string destination_agent_id = 2;
+    bytes payload = 3;
+}
+
+message AgentMessageResponse {
+    bool delivered = 1;
+}

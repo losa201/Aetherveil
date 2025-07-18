@@ -1,0 +1,222 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.alertRules.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: aetherveil-sentinel.coordinator
+      rules:
+        - alert: AetherVeilCoordinatorDown
+          expr: up{job="aetherveil-sentinel-coordinator"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator is down"
+            description: "Coordinator has been down for more than 2 minutes"
+            
+        - alert: AetherVeilCoordinatorHighCPU
+          expr: rate(process_cpu_seconds_total{job="aetherveil-sentinel-coordinator"}[5m]) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator high CPU usage"
+            description: "Coordinator CPU usage is {{ $value }}% for more than 5 minutes"
+            
+        - alert: AetherVeilCoordinatorHighMemory
+          expr: process_resident_memory_bytes{job="aetherveil-sentinel-coordinator"} / 1024 / 1024 > 1000
+          for: 5m
+          labels:
+            severity: warning
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator high memory usage"
+            description: "Coordinator memory usage is {{ $value }}MB for more than 5 minutes"
+            
+        - alert: AetherVeilCoordinatorLeaderElectionFailed
+          expr: increase(aetherveil_coordinator_leader_election_failures_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator leader election failed"
+            description: "Leader election has failed {{ $value }} times in the last 5 minutes"
+            
+        - alert: AetherVeilCoordinatorTaskQueueFull
+          expr: aetherveil_coordinator_task_queue_size / aetherveil_coordinator_task_queue_capacity > 0.9
+          for: 2m
+          labels:
+            severity: warning
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator task queue is nearly full"
+            description: "Task queue is {{ $value }}% full"
+            
+        - alert: AetherVeilCoordinatorDatabaseConnectionFailed
+          expr: increase(aetherveil_coordinator_database_connection_failures_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator database connection failed"
+            description: "Database connection failures: {{ $value }} in the last 5 minutes"
+            
+        - alert: AetherVeilCoordinatorRedisConnectionFailed
+          expr: increase(aetherveil_coordinator_redis_connection_failures_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: critical
+            component: coordinator
+          annotations:
+            summary: "Aetherveil Sentinel Coordinator Redis connection failed"
+            description: "Redis connection failures: {{ $value }} in the last 5 minutes"
+            
+    - name: aetherveil-sentinel.agents
+      rules:
+        - alert: AetherVeilAgentDown
+          expr: up{job="aetherveil-sentinel-agents"} == 0
+          for: 2m
+          labels:
+            severity: warning
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent is down"
+            description: "Agent {{ $labels.instance }} has been down for more than 2 minutes"
+            
+        - alert: AetherVeilAgentHighCPU
+          expr: rate(process_cpu_seconds_total{job="aetherveil-sentinel-agents"}[5m]) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent high CPU usage"
+            description: "Agent {{ $labels.instance }} CPU usage is {{ $value }}% for more than 5 minutes"
+            
+        - alert: AetherVeilAgentHighMemory
+          expr: process_resident_memory_bytes{job="aetherveil-sentinel-agents"} / 1024 / 1024 > 512
+          for: 5m
+          labels:
+            severity: warning
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent high memory usage"
+            description: "Agent {{ $labels.instance }} memory usage is {{ $value }}MB for more than 5 minutes"
+            
+        - alert: AetherVeilAgentTaskFailureRate
+          expr: rate(aetherveil_agent_task_failures_total[5m]) / rate(aetherveil_agent_tasks_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent high task failure rate"
+            description: "Agent {{ $labels.instance }} task failure rate is {{ $value }}% for more than 5 minutes"
+            
+        - alert: AetherVeilAgentHeartbeatMissing
+          expr: increase(aetherveil_agent_heartbeat_failures_total[5m]) > 0
+          for: 1m
+          labels:
+            severity: warning
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent heartbeat missing"
+            description: "Agent {{ $labels.instance }} heartbeat failures: {{ $value }} in the last 5 minutes"
+            
+        - alert: AetherVeilAgentDisconnected
+          expr: aetherveil_agent_connection_status == 0
+          for: 2m
+          labels:
+            severity: critical
+            component: agent
+          annotations:
+            summary: "Aetherveil Sentinel Agent disconnected"
+            description: "Agent {{ $labels.instance }} has been disconnected for more than 2 minutes"
+            
+    - name: aetherveil-sentinel.security
+      rules:
+        - alert: AetherVeilSecurityTLSCertificateExpiring
+          expr: aetherveil_security_certificate_expiry_seconds < 86400 * 7
+          for: 1m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "Aetherveil Sentinel TLS certificate expiring soon"
+            description: "TLS certificate {{ $labels.certificate }} will expire in {{ $value }} seconds"
+            
+        - alert: AetherVeilSecurityTLSCertificateExpired
+          expr: aetherveil_security_certificate_expiry_seconds < 0
+          for: 1m
+          labels:
+            severity: critical
+            component: security
+          annotations:
+            summary: "Aetherveil Sentinel TLS certificate expired"
+            description: "TLS certificate {{ $labels.certificate }} has expired"
+            
+        - alert: AetherVeilSecurityAuthenticationFailures
+          expr: increase(aetherveil_security_authentication_failures_total[5m]) > 10
+          for: 1m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "Aetherveil Sentinel high authentication failures"
+            description: "Authentication failures: {{ $value }} in the last 5 minutes"
+            
+        - alert: AetherVeilSecurityAuthorizationFailures
+          expr: increase(aetherveil_security_authorization_failures_total[5m]) > 5
+          for: 1m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "Aetherveil Sentinel high authorization failures"
+            description: "Authorization failures: {{ $value }} in the last 5 minutes"
+            
+    - name: aetherveil-sentinel.performance
+      rules:
+        - alert: AetherVeilHighLatency
+          expr: histogram_quantile(0.95, rate(aetherveil_request_duration_seconds_bucket[5m])) > 1.0
+          for: 5m
+          labels:
+            severity: warning
+            component: performance
+          annotations:
+            summary: "Aetherveil Sentinel high request latency"
+            description: "95th percentile latency is {{ $value }}s for more than 5 minutes"
+            
+        - alert: AetherVeilLowThroughput
+          expr: rate(aetherveil_requests_total[5m]) < 10
+          for: 5m
+          labels:
+            severity: warning
+            component: performance
+          annotations:
+            summary: "Aetherveil Sentinel low request throughput"
+            description: "Request throughput is {{ $value }} requests/second for more than 5 minutes"
+            
+        - alert: AetherVeilHighErrorRate
+          expr: rate(aetherveil_requests_total{status=~"5.."}[5m]) / rate(aetherveil_requests_total[5m]) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: performance
+          annotations:
+            summary: "Aetherveil Sentinel high error rate"
+            description: "Error rate is {{ $value }}% for more than 5 minutes"
+
+{{- end }}

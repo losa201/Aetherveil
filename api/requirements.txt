@@ -1,0 +1,42 @@
+# Aetherveil Sentinel API Dependencies
+# Core FastAPI dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Security and authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# HTTP client and utilities
+httpx==0.25.2
+requests==2.31.0
+aiofiles==23.2.1
+
+# Data validation and serialization
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2  # For testing
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.4.8
+
+# Logging and monitoring
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Database (if needed)
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# Async utilities
+asyncio-mqtt==0.16.1
+aioredis==2.0.1

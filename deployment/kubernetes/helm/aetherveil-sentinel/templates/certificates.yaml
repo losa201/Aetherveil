@@ -1,0 +1,106 @@
+{{- if and .Values.security.enabled .Values.security.certificates.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "aetherveil-sentinel.fullname" . }}-ca-secret
+  issuerRef:
+    name: {{ include "aetherveil-sentinel.fullname" . }}-ca-issuer
+    kind: ClusterIssuer
+  commonName: "Aetherveil Sentinel CA"
+  isCA: true
+  duration: 8760h # 1 year
+  renewBefore: 720h # 30 days
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-ca-issuer
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "aetherveil-sentinel.fullname" . }}-ca-secret
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coordinator
+spec:
+  secretName: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-tls
+  issuerRef:
+    name: {{ include "aetherveil-sentinel.fullname" . }}-ca-issuer
+    kind: ClusterIssuer
+  commonName: "{{ include "aetherveil-sentinel.fullname" . }}-coordinator"
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  dnsNames:
+    - "{{ include "aetherveil-sentinel.fullname" . }}-coordinator"
+    - "{{ include "aetherveil-sentinel.fullname" . }}-coordinator.{{ .Release.Namespace }}"
+    - "{{ include "aetherveil-sentinel.fullname" . }}-coordinator.{{ .Release.Namespace }}.svc"
+    - "{{ include "aetherveil-sentinel.fullname" . }}-coordinator.{{ .Release.Namespace }}.svc.cluster.local"
+    - "localhost"
+  ipAddresses:
+    - "127.0.0.1"
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-agents
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  secretName: {{ include "aetherveil-sentinel.fullname" . }}-agents-tls
+  issuerRef:
+    name: {{ include "aetherveil-sentinel.fullname" . }}-ca-issuer
+    kind: ClusterIssuer
+  commonName: "aetherveil-agent"
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  dnsNames:
+    - "*.{{ .Release.Namespace }}"
+    - "*.{{ .Release.Namespace }}.svc"
+    - "*.{{ .Release.Namespace }}.svc.cluster.local"
+    - "localhost"
+  ipAddresses:
+    - "127.0.0.1"
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-certificates
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .Values.security.certificates.tlsCrt | default "" | b64enc }}
+  tls.key: {{ .Values.security.certificates.tlsKey | default "" | b64enc }}
+  ca.crt: {{ .Values.security.certificates.caCrt | default "" | b64enc }}
+
+{{- end }}

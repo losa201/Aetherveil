@@ -1,0 +1,21 @@
+{{- if .Values.coordinator.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coordinator
+spec:
+  {{- if .Values.coordinator.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.coordinator.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.coordinator.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.coordinator.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "aetherveil-sentinel.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: coordinator
+{{- end }}

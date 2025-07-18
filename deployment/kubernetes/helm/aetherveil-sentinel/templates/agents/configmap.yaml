@@ -1,0 +1,275 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-agent-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+data:
+  agent.yaml: |
+    # Agent Configuration
+    agent:
+      id: "${AGENT_ID}"
+      type: "${AGENT_TYPE}"
+      capabilities: "${AGENT_CAPABILITIES}"
+      heartbeat_interval: 30
+      max_retry_attempts: 3
+      retry_delay: 5
+      task_timeout: 3600
+      max_concurrent_tasks: 10
+      
+    # Coordinator Configuration
+    coordinator:
+      host: "${COORDINATOR_HOST}"
+      port: ${COORDINATOR_PORT}
+      grpc_port: 50051
+      timeout: 30
+      retry_attempts: 3
+      
+    # Redis Configuration
+    redis:
+      host: "${REDIS_HOST}"
+      port: ${REDIS_PORT}
+      database: ${REDIS_DATABASE}
+      password: "${REDIS_PASSWORD}"
+      socket_timeout: 5
+      socket_connect_timeout: 5
+      health_check_interval: 30
+      
+    # Security Configuration
+    security:
+      enable_tls: ${ENABLE_TLS}
+      certificate_path: "${CERTIFICATE_PATH}"
+      private_key_path: "${PRIVATE_KEY_PATH}"
+      ca_certificate_path: "${CA_CERTIFICATE_PATH}"
+      verify_ssl: true
+      
+    # Monitoring Configuration
+    monitoring:
+      enabled: true
+      metrics_port: 9090
+      metrics_path: "/metrics"
+      health_check_port: 8080
+      health_check_path: "/health"
+      readiness_check_path: "/ready"
+      
+    # Logging Configuration
+    logging:
+      level: "${LOG_LEVEL}"
+      format: "json"
+      file: "/app/logs/agent.log"
+      max_size: 50
+      max_backups: 5
+      max_age: 7
+      
+    # Tracing Configuration
+    tracing:
+      enabled: {{ .Values.tracing.enabled }}
+      {{- if .Values.tracing.enabled }}
+      jaeger:
+        endpoint: "${JAEGER_ENDPOINT}"
+        service_name: "aetherveil-agent-${AGENT_TYPE}"
+        sampler_type: "const"
+        sampler_param: 1
+      {{- end }}
+      
+    # Performance Configuration
+    performance:
+      worker_threads: 4
+      connection_pool_size: 10
+      request_timeout: 60
+      max_retries: 3
+      backoff_factor: 2
+      
+    # Resource Limits
+    resources:
+      cpu_limit: 80
+      memory_limit: 80
+      disk_limit: 80
+      network_limit: 1000
+      
+    # Development Configuration
+    development:
+      debug: {{ .Values.development.debug }}
+      mock_services: {{ .Values.development.test.mockServices }}
+      
+  capabilities.yaml: |
+    # Capability definitions for different agent types
+    capabilities:
+      reconnaissance:
+        - name: "dns_enumeration"
+          description: "DNS enumeration and subdomain discovery"
+          tools: ["dig", "nslookup", "subfinder", "amass"]
+          parameters:
+            - name: "domain"
+              type: "string"
+              required: true
+            - name: "wordlist"
+              type: "string"
+              required: false
+          
+        - name: "port_scanning"
+          description: "Network port scanning"
+          tools: ["nmap", "masscan"]
+          parameters:
+            - name: "target"
+              type: "string"
+              required: true
+            - name: "ports"
+              type: "string"
+              required: false
+            - name: "scan_type"
+              type: "string"
+              required: false
+              
+        - name: "service_detection"
+          description: "Service version detection"
+          tools: ["nmap", "banner_grabbing"]
+          parameters:
+            - name: "target"
+              type: "string"
+              required: true
+            - name: "ports"
+              type: "string"
+              required: false
+              
+      scanner:
+        - name: "vulnerability_scanning"
+          description: "Vulnerability assessment"
+          tools: ["nessus", "openvas", "nuclei"]
+          parameters:
+            - name: "target"
+              type: "string"
+              required: true
+            - name: "scan_type"
+              type: "string"
+              required: false
+              
+        - name: "web_scanning"
+          description: "Web application scanning"
+          tools: ["nikto", "gobuster", "dirb"]
+          parameters:
+            - name: "url"
+              type: "string"
+              required: true
+            - name: "wordlist"
+              type: "string"
+              required: false
+              
+      exploiter:
+        - name: "exploit_execution"
+          description: "Exploit execution"
+          tools: ["metasploit", "custom_exploits"]
+          parameters:
+            - name: "target"
+              type: "string"
+              required: true
+            - name: "exploit"
+              type: "string"
+              required: true
+            - name: "payload"
+              type: "string"
+              required: false
+              
+      osint:
+        - name: "social_media_intelligence"
+          description: "Social media intelligence gathering"
+          tools: ["sherlock", "social_analyzer"]
+          parameters:
+            - name: "username"
+              type: "string"
+              required: true
+            - name: "platforms"
+              type: "array"
+              required: false
+              
+        - name: "domain_intelligence"
+          description: "Domain intelligence gathering"
+          tools: ["whois", "dns_dumpster"]
+          parameters:
+            - name: "domain"
+              type: "string"
+              required: true
+              
+      stealth:
+        - name: "traffic_obfuscation"
+          description: "Traffic obfuscation and anonymization"
+          tools: ["tor", "proxychains", "vpn"]
+          parameters:
+            - name: "method"
+              type: "string"
+              required: true
+            - name: "exit_nodes"
+              type: "array"
+              required: false
+              
+  tools.yaml: |
+    # Tool configurations for different agent types
+    tools:
+      common:
+        nmap:
+          binary: "/usr/bin/nmap"
+          default_args: ["-sS", "-O", "-sV", "--script", "default"]
+          timeout: 300
+          
+        curl:
+          binary: "/usr/bin/curl"
+          default_args: ["-s", "-L", "--max-time", "30"]
+          timeout: 30
+          
+      reconnaissance:
+        subfinder:
+          binary: "/usr/bin/subfinder"
+          config_file: "/app/config/subfinder.yaml"
+          timeout: 120
+          
+        amass:
+          binary: "/usr/bin/amass"
+          config_file: "/app/config/amass.ini"
+          timeout: 300
+          
+        masscan:
+          binary: "/usr/bin/masscan"
+          default_args: ["--rate=1000"]
+          timeout: 300
+          
+      scanner:
+        nuclei:
+          binary: "/usr/bin/nuclei"
+          templates_path: "/app/nuclei-templates"
+          timeout: 600
+          
+        nikto:
+          binary: "/usr/bin/nikto"
+          config_file: "/app/config/nikto.conf"
+          timeout: 300
+          
+        gobuster:
+          binary: "/usr/bin/gobuster"
+          wordlists_path: "/app/wordlists"
+          timeout: 300
+          
+      exploiter:
+        metasploit:
+          framework_path: "/opt/metasploit-framework"
+          database_url: "postgresql://msf:msf@localhost/msf"
+          timeout: 600
+          
+      osint:
+        sherlock:
+          binary: "/usr/bin/sherlock"
+          timeout: 120
+          
+        theHarvester:
+          binary: "/usr/bin/theHarvester"
+          timeout: 300
+          
+      stealth:
+        tor:
+          binary: "/usr/bin/tor"
+          config_file: "/app/config/torrc"
+          
+        proxychains:
+          binary: "/usr/bin/proxychains"
+          config_file: "/app/config/proxychains.conf"

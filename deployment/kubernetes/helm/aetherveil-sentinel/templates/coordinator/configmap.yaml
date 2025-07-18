@@ -1,0 +1,186 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" . }}-coordinator-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" . | nindent 4 }}
+    app.kubernetes.io/component: coordinator
+data:
+  config.yaml: |
+    # Coordinator Configuration
+    coordinator:
+      host: "0.0.0.0"
+      port: {{ .Values.coordinator.service.targetPort }}
+      workers: 4
+      max_connections: 1000
+      
+    # Database Configuration
+    database:
+      type: "postgresql"
+      host: "{{ .Values.coordinator.config.database.host }}"
+      port: {{ .Values.coordinator.config.database.port }}
+      name: "{{ .Values.coordinator.config.database.name }}"
+      user: "{{ .Values.coordinator.config.database.user }}"
+      pool_size: 20
+      max_overflow: 30
+      pool_timeout: 30
+      pool_recycle: 3600
+      
+    # Redis Configuration
+    redis:
+      host: "{{ .Values.coordinator.config.redis.host }}"
+      port: {{ .Values.coordinator.config.redis.port }}
+      database: {{ .Values.coordinator.config.redis.database }}
+      pool_size: 20
+      socket_timeout: 5
+      socket_connect_timeout: 5
+      health_check_interval: 30
+      
+    # Cluster Configuration
+    cluster:
+      node_id: "{{ .Values.coordinator.config.cluster.nodeId }}"
+      election_timeout: {{ .Values.coordinator.config.cluster.electionTimeout }}
+      heartbeat_interval: {{ .Values.coordinator.config.cluster.heartbeatInterval }}
+      consensus_enabled: true
+      leader_election_enabled: true
+      
+    # Security Configuration
+    security:
+      enable_tls: {{ .Values.coordinator.config.security.enableTLS }}
+      certificate_path: "/app/certs/tls.crt"
+      private_key_path: "/app/certs/tls.key"
+      ca_certificate_path: "/app/certs/ca.crt"
+      certificate_manager:
+        enabled: {{ .Values.coordinator.config.security.certificateManager.enabled }}
+        issuer: "{{ .Values.coordinator.config.security.certificateManager.issuer }}"
+        auto_rotation: true
+        rotation_interval: 2160h  # 90 days
+      authentication:
+        jwt_secret_key: "{{ .Values.coordinator.config.security.jwtSecretKey | default "default-jwt-secret" }}"
+        jwt_expiration: 3600
+        token_refresh_enabled: true
+      authorization:
+        rbac_enabled: true
+        default_role: "agent"
+        
+    # Agent Configuration
+    agents:
+      heartbeat_interval: 30
+      heartbeat_timeout: 120
+      max_inactive_time: 300
+      auto_registration: true
+      capability_discovery: true
+      load_balancing:
+        algorithm: "resource_aware"
+        sticky_sessions: false
+        health_check_interval: 30
+        
+    # Task Configuration
+    tasks:
+      max_concurrent_tasks: 100
+      task_timeout: 3600
+      retry_attempts: 3
+      retry_delay: 30
+      queue_size: 1000
+      priority_levels: 5
+      
+    # Monitoring Configuration
+    monitoring:
+      enabled: true
+      metrics_port: 9090
+      metrics_path: "/metrics"
+      health_check_port: 8080
+      health_check_path: "/health"
+      readiness_check_path: "/ready"
+      prometheus:
+        enabled: true
+        scrape_interval: 30s
+        scrape_timeout: 10s
+      logging:
+        level: "{{ .Values.common.env.LOG_LEVEL }}"
+        format: "json"
+        file: "/app/logs/coordinator.log"
+        max_size: 100
+        max_backups: 10
+        max_age: 30
+        
+    # Tracing Configuration
+    tracing:
+      enabled: {{ .Values.tracing.enabled }}
+      {{- if .Values.tracing.enabled }}
+      jaeger:
+        endpoint: "{{ .Values.tracing.jaeger.collector.endpoint | default "http://jaeger-collector:14268/api/traces" }}"
+        service_name: "aetherveil-coordinator"
+        sampler_type: "const"
+        sampler_param: 1
+      {{- end }}
+      
+    # Backup Configuration
+    backup:
+      enabled: {{ .Values.backup.enabled }}
+      {{- if .Values.backup.enabled }}
+      schedule: "{{ .Values.backup.schedule }}"
+      retention: "{{ .Values.backup.retention }}"
+      storage:
+        type: "{{ .Values.backup.storage.type }}"
+        {{- if eq .Values.backup.storage.type "s3" }}
+        s3:
+          bucket: "{{ .Values.backup.storage.bucket }}"
+          region: "{{ .Values.backup.storage.region }}"
+          access_key_id: "${AWS_ACCESS_KEY_ID}"
+          secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+        {{- end }}
+      {{- end }}
+      
+    # Development Configuration
+    development:
+      debug: {{ .Values.development.debug }}
+      profiling: {{ .Values.development.profiling }}
+      mock_services: {{ .Values.development.test.mockServices }}
+      
+  logging.yaml: |
+    version: 1
+    disable_existing_loggers: false
+    
+    formatters:
+      standard:
+        format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+      json:
+        format: "%(asctime)s"
+        class: "pythonjsonlogger.jsonlogger.JsonFormatter"
+        
+    handlers:
+      console:
+        class: logging.StreamHandler
+        level: DEBUG
+        formatter: standard
+        stream: ext://sys.stdout
+        
+      file:
+        class: logging.handlers.RotatingFileHandler
+        level: INFO
+        formatter: json
+        filename: /app/logs/coordinator.log
+        maxBytes: 104857600  # 100MB
+        backupCount: 10
+        
+    loggers:
+      aetherveil:
+        level: "{{ .Values.common.env.LOG_LEVEL }}"
+        handlers: [console, file]
+        propagate: false
+        
+      uvicorn:
+        level: INFO
+        handlers: [console, file]
+        propagate: false
+        
+      fastapi:
+        level: INFO
+        handlers: [console, file]
+        propagate: false
+        
+    root:
+      level: INFO
+      handlers: [console, file]

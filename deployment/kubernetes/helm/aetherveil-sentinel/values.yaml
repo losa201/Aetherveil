@@ -1,0 +1,486 @@
+# Default values for aetherveil-sentinel
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  
+# Common configuration
+common:
+  image:
+    registry: ghcr.io
+    repository: aetherveil/sentinel
+    tag: "1.0.0"
+    pullPolicy: Always
+  
+  # Service account configuration
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+    
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+        
+  # Resource limits
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      
+  # Node selector
+  nodeSelector: {}
+  
+  # Tolerations
+  tolerations: []
+  
+  # Affinity
+  affinity: {}
+  
+  # Environment variables
+  env:
+    LOG_LEVEL: INFO
+    PYTHONUNBUFFERED: "1"
+
+# Coordinator configuration
+coordinator:
+  enabled: true
+  name: coordinator
+  replicaCount: 3
+  
+  image:
+    repository: aetherveil/sentinel-coordinator
+    tag: "1.0.0"
+    
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: aetherveil.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: aetherveil-tls
+        hosts:
+          - aetherveil.local
+          
+  # Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    
+  # Liveness and readiness probes
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    
+  # Persistence
+  persistence:
+    enabled: true
+    accessMode: ReadWriteOnce
+    size: 10Gi
+    storageClass: ""
+    
+  # Configuration
+  config:
+    database:
+      host: aetherveil-postgresql
+      port: 5432
+      name: aetherveil
+      user: aetherveil
+    redis:
+      host: aetherveil-redis-master
+      port: 6379
+      database: 0
+    security:
+      enableTLS: true
+      certificateManager:
+        enabled: true
+        issuer: letsencrypt-prod
+    cluster:
+      nodeId: coordinator
+      electionTimeout: 5000
+      heartbeatInterval: 2000
+
+# Agent configurations
+agents:
+  # Reconnaissance agents
+  reconnaissance:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: aetherveil/sentinel-reconnaissance
+      tag: "1.0.0"
+    capabilities:
+      - dns_enumeration
+      - port_scanning
+      - service_detection
+      - subdomain_discovery
+      - whois_lookup
+      - banner_grabbing
+      - zone_transfer
+      - reverse_dns
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+      
+  # Scanner agents
+  scanner:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: aetherveil/sentinel-scanner
+      tag: "1.0.0"
+    capabilities:
+      - vulnerability_scanning
+      - web_scanning
+      - network_scanning
+      - ssl_scanning
+      - compliance_scanning
+      - threat_detection
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+      
+  # Exploiter agents
+  exploiter:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: aetherveil/sentinel-exploiter
+      tag: "1.0.0"
+    capabilities:
+      - exploit_execution
+      - payload_generation
+      - privilege_escalation
+      - lateral_movement
+      - persistence
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPUUtilizationPercentage: 60
+      
+  # OSINT agents
+  osint:
+    enabled: true
+    replicaCount: 2
+    image:
+      repository: aetherveil/sentinel-osint
+      tag: "1.0.0"
+    capabilities:
+      - social_media_intelligence
+      - domain_intelligence
+      - email_intelligence
+      - threat_intelligence
+      - data_breach_monitoring
+      - dark_web_monitoring
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+      
+  # Stealth agents
+  stealth:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: aetherveil/sentinel-stealth
+      tag: "1.0.0"
+    capabilities:
+      - traffic_obfuscation
+      - proxy_chaining
+      - anonymization
+      - evasion_techniques
+      - anti_detection
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPUUtilizationPercentage: 70
+
+# Dependencies configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "aetherveil-redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 8Gi
+
+postgresql:
+  enabled: true
+  auth:
+    username: aetherveil
+    password: "aetherveil-postgres-password"
+    database: aetherveil
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+  readReplicas:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 20Gi
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  
+  prometheus:
+    enabled: true
+    server:
+      retention: "15d"
+      persistentVolume:
+        enabled: true
+        size: 50Gi
+    alertmanager:
+      enabled: true
+      persistentVolume:
+        enabled: true
+        size: 10Gi
+        
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 10Gi
+    adminUser: admin
+    adminPassword: "grafana-admin-password"
+    
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    
+  # Alert rules
+  alertRules:
+    enabled: true
+    
+  # Custom dashboards
+  dashboards:
+    enabled: true
+
+# Security configuration
+security:
+  enabled: true
+  
+  # Network policies
+  networkPolicy:
+    enabled: true
+    
+  # Pod security policies
+  podSecurityPolicy:
+    enabled: true
+    
+  # TLS configuration
+  tls:
+    enabled: true
+    
+  # Certificate management
+  certificates:
+    enabled: true
+    issuer: letsencrypt-prod
+    
+  # RBAC
+  rbac:
+    enabled: true
+    
+  # Admission controllers
+  admissionController:
+    enabled: true
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: "30d"
+  storage:
+    type: s3
+    bucket: aetherveil-backups
+    region: us-east-1
+
+# Logging configuration
+logging:
+  enabled: true
+  level: INFO
+  
+  # Log aggregation
+  aggregation:
+    enabled: true
+    type: elasticsearch
+    
+  # Log shipping
+  shipping:
+    enabled: true
+    type: fluent-bit
+
+# Tracing configuration
+tracing:
+  enabled: true
+  type: jaeger
+  
+  jaeger:
+    enabled: true
+    collector:
+      image:
+        repository: jaegertracing/jaeger-collector
+        tag: "1.42.0"
+    query:
+      image:
+        repository: jaegertracing/jaeger-query  
+        tag: "1.42.0"
+    agent:
+      image:
+        repository: jaegertracing/jaeger-agent
+        tag: "1.42.0"
+
+# External integrations
+integrations:
+  # Slack notifications
+  slack:
+    enabled: false
+    webhook: ""
+    channel: "#security-alerts"
+    
+  # Email notifications
+  email:
+    enabled: false
+    smtp:
+      host: ""
+      port: 587
+      username: ""
+      password: ""
+      
+  # Webhook notifications
+  webhook:
+    enabled: false
+    url: ""
+    
+  # External APIs
+  apis:
+    shodan:
+      enabled: false
+      apiKey: ""
+    virustotal:
+      enabled: false
+      apiKey: ""
+    censys:
+      enabled: false
+      apiKey: ""
+      secret: ""
+
+# Development configuration
+development:
+  enabled: false
+  debug: false
+  profiling: false
+  
+  # Local development
+  local:
+    enabled: false
+    hostPath: "/tmp/aetherveil"
+    
+  # Test environment
+  test:
+    enabled: false
+    mockServices: true

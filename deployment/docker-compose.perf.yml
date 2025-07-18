@@ -1,0 +1,233 @@
+version: '3.8'
+
+services:
+  # Performance Test Coordinator
+  coordinator-perf:
+    build:
+      context: ../
+      dockerfile: deployment/docker/coordinator/Dockerfile
+    container_name: aetherveil-coordinator-perf
+    environment:
+      - ENVIRONMENT=performance
+      - REDIS_URL=redis://redis-perf:6379
+      - NEO4J_URI=bolt://neo4j-perf:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=perfpassword
+      - ENCRYPTION_KEY=perf-encryption-key-32-characters
+      - JWT_SECRET=perf-jwt-secret
+      - GRPC_PORT=50051
+      - API_PORT=8000
+      - ENABLE_MTLS=false
+      - LOG_LEVEL=INFO
+      - ENABLE_METRICS=true
+      - METRICS_PORT=9090
+    ports:
+      - "8000:8000"
+      - "50051:50051"
+      - "9090:9090"
+    depends_on:
+      - redis-perf
+      - neo4j-perf
+    networks:
+      - perf-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  # Performance Test Agents (Multiple instances)
+  reconnaissance-agent-perf:
+    build:
+      context: ../
+      dockerfile: deployment/docker/agents/reconnaissance/Dockerfile
+    environment:
+      - AGENT_TYPE=reconnaissance
+      - COORDINATOR_URL=grpc://coordinator-perf:50051
+      - REDIS_URL=redis://redis-perf:6379
+      - ENABLE_MTLS=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      - coordinator-perf
+      - redis-perf
+    networks:
+      - perf-network
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  scanner-agent-perf:
+    build:
+      context: ../
+      dockerfile: deployment/docker/agents/scanner/Dockerfile
+    environment:
+      - AGENT_TYPE=scanner
+      - COORDINATOR_URL=grpc://coordinator-perf:50051
+      - REDIS_URL=redis://redis-perf:6379
+      - ENABLE_MTLS=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      - coordinator-perf
+      - redis-perf
+    networks:
+      - perf-network
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  osint-agent-perf:
+    build:
+      context: ../
+      dockerfile: deployment/docker/agents/osint/Dockerfile
+    environment:
+      - AGENT_TYPE=osint
+      - COORDINATOR_URL=grpc://coordinator-perf:50051
+      - REDIS_URL=redis://redis-perf:6379
+      - ENABLE_MTLS=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      - coordinator-perf
+      - redis-perf
+    networks:
+      - perf-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Performance Test Redis (Optimized)
+  redis-perf:
+    image: redis:7-alpine
+    container_name: aetherveil-redis-perf
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+      --timeout 0
+      --databases 16
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_perf_data:/data
+    networks:
+      - perf-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  # Performance Test Neo4j (Optimized)
+  neo4j-perf:
+    image: neo4j:5-enterprise
+    container_name: aetherveil-neo4j-perf
+    environment:
+      - NEO4J_AUTH=neo4j/perfpassword
+      - NEO4J_ACCEPT_LICENSE_AGREEMENT=yes
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+      - NEO4J_dbms_memory_heap_initial__size=2G
+      - NEO4J_dbms_memory_heap_max__size=4G
+      - NEO4J_dbms_memory_pagecache_size=2G
+      - NEO4J_dbms_tx__log_rotation_retention__policy=1G size
+      - NEO4J_dbms_checkpoint_interval_time=300s
+      - NEO4J_dbms_checkpoint_interval_tx=100000
+      - NEO4J_dbms_logs_query_enabled=false
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*,gds.*
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_perf_data:/data
+      - neo4j_perf_logs:/logs
+    networks:
+      - perf-network
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '2.0'
+
+  # Monitoring Stack for Performance Testing
+  prometheus-perf:
+    image: prom/prometheus:latest
+    container_name: aetherveil-prometheus-perf
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=1h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    ports:
+      - "9091:9090"
+    volumes:
+      - prometheus_perf_data:/prometheus
+      - ./monitoring/prometheus-perf.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - perf-network
+
+  grafana-perf:
+    image: grafana/grafana:latest
+    container_name: aetherveil-grafana-perf
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=perfpassword
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_perf_data:/var/lib/grafana
+      - ./monitoring/grafana-perf/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - perf-network
+    depends_on:
+      - prometheus-perf
+
+  # Load Generator
+  load-generator:
+    build:
+      context: ../
+      dockerfile: deployment/docker/load-generator/Dockerfile
+    container_name: aetherveil-load-generator
+    environment:
+      - TARGET_URL=http://coordinator-perf:8000
+      - LOAD_PATTERN=ramp
+      - MAX_USERS=100
+      - SPAWN_RATE=10
+      - RUN_TIME=300
+    depends_on:
+      - coordinator-perf
+    networks:
+      - perf-network
+    volumes:
+      - load_test_results:/results
+
+volumes:
+  redis_perf_data:
+  neo4j_perf_data:
+  neo4j_perf_logs:
+  prometheus_perf_data:
+  grafana_perf_data:
+  load_test_results:
+
+networks:
+  perf-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500

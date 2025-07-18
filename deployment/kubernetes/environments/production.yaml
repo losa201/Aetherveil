@@ -1,0 +1,401 @@
+# Production environment values for Aetherveil Sentinel
+# This file contains settings specific to production environment
+
+# Global settings
+global:
+  imageRegistry: "ghcr.io"
+  imagePullSecrets: 
+    - name: ghcr-secret
+
+# Production configuration
+development:
+  enabled: false
+  debug: false
+  profiling: false
+
+# Common configuration
+common:
+  image:
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  
+  # Full resource limits for production
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  # Security hardening
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+  
+  # Anti-affinity for production
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - aetherveil-sentinel
+            topologyKey: kubernetes.io/hostname
+
+# Coordinator configuration
+coordinator:
+  replicaCount: 3
+  
+  # Enable autoscaling for production
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    
+  # Enable pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+    
+  # Enable persistence for production
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: "fast-ssd"
+    
+  # Production ingress configuration
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/rate-limit: "100"
+      nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: aetherveil.company.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: aetherveil-tls
+        hosts:
+          - aetherveil.company.com
+
+# Agent configurations with full production settings
+agents:
+  reconnaissance:
+    replicaCount: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+        
+  scanner:
+    replicaCount: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+        
+  exploiter:
+    replicaCount: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 60
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 8Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+        
+  osint:
+    replicaCount: 3
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilizationPercentage: 70
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+        
+  stealth:
+    replicaCount: 2
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+# Production Redis configuration
+redis:
+  auth:
+    enabled: true
+    password: "CHANGE-ME-IN-PRODUCTION"
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+  replica:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+
+# Production PostgreSQL configuration
+postgresql:
+  auth:
+    username: aetherveil
+    password: "CHANGE-ME-IN-PRODUCTION"
+    database: aetherveil
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+# Full monitoring stack for production
+monitoring:
+  enabled: true
+  
+  prometheus:
+    enabled: true
+    server:
+      retention: "30d"
+      persistentVolume:
+        enabled: true
+        size: 100Gi
+        storageClass: "fast-ssd"
+      resources:
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+    alertmanager:
+      enabled: true
+      persistentVolume:
+        enabled: true
+        size: 20Gi
+        storageClass: "fast-ssd"
+        
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    adminUser: admin
+    adminPassword: "CHANGE-ME-IN-PRODUCTION"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 200m
+        memory: 512Mi
+    
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    
+  alertRules:
+    enabled: true
+    
+  dashboards:
+    enabled: true
+
+# Full security configuration for production
+security:
+  enabled: true
+  
+  networkPolicy:
+    enabled: true
+    
+  podSecurityPolicy:
+    enabled: true
+    
+  tls:
+    enabled: true
+    
+  certificates:
+    enabled: true
+    issuer: letsencrypt-prod
+    
+  rbac:
+    enabled: true
+
+# Production backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: "30d"
+  storage:
+    type: s3
+    bucket: "aetherveil-prod-backups"
+    region: "us-east-1"
+    # Set these via environment variables or secrets
+    awsAccessKeyId: "CHANGE-ME"
+    awsSecretAccessKey: "CHANGE-ME"
+
+# Production logging configuration
+logging:
+  enabled: true
+  level: INFO
+  
+  aggregation:
+    enabled: true
+    type: elasticsearch
+    
+  shipping:
+    enabled: true
+    type: fluent-bit
+
+# Production tracing configuration
+tracing:
+  enabled: true
+  type: jaeger
+  
+  jaeger:
+    enabled: true
+    collector:
+      resources:
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+        requests:
+          cpu: 200m
+          memory: 512Mi
+    query:
+      resources:
+        limits:
+          cpu: 500m
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+
+# Production external integrations
+integrations:
+  slack:
+    enabled: true
+    webhook: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    channel: "#security-alerts"
+    
+  email:
+    enabled: true
+    smtp:
+      host: "smtp.company.com"
+      port: 587
+      username: "alerts@company.com"
+      password: "CHANGE-ME-IN-PRODUCTION"
+      
+  webhook:
+    enabled: true
+    url: "https://alerts.company.com/webhook"
+    
+  apis:
+    shodan:
+      enabled: true
+      apiKey: "CHANGE-ME-IN-PRODUCTION"
+    virustotal:
+      enabled: true
+      apiKey: "CHANGE-ME-IN-PRODUCTION"
+    censys:
+      enabled: true
+      apiKey: "CHANGE-ME-IN-PRODUCTION"
+      secret: "CHANGE-ME-IN-PRODUCTION"
+
+# Node selection for production workloads
+common:
+  nodeSelector:
+    node-type: "compute"
+    
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "aetherveil"
+      effect: "NoSchedule"

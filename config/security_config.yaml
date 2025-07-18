@@ -1,0 +1,302 @@
+# Aetherveil Sentinel Security Configuration
+# Production-ready security settings with comprehensive protection
+
+security:
+  # Encryption settings
+  encryption:
+    enabled: true
+    algorithms:
+      - "AES-256-GCM"
+      - "ChaCha20-Poly1305"
+      - "AES-256-CBC"
+    key_rotation_interval: 86400  # 24 hours
+    master_key_source: "gcp_secret_manager"  # Options: local, gcp_secret_manager, vault
+    key_derivation:
+      method: "argon2"  # Options: argon2, pbkdf2, scrypt, hkdf
+      iterations: 100000
+      memory: 65536
+      parallelism: 4
+      salt_length: 32
+
+  # Authentication settings
+  authentication:
+    jwt:
+      enabled: true
+      access_token_expire: 900  # 15 minutes
+      refresh_token_expire: 86400  # 24 hours
+      api_key_expire: 2592000  # 30 days
+      algorithm: "RS256"
+      issuer: "aetherveil-sentinel"
+      audience: "aetherveil-agents"
+      enable_refresh_rotation: true
+      max_refresh_uses: 5
+      
+    certificate:
+      enabled: true
+      mutual_tls: true
+      ca_cert_path: "/app/certs/ca.crt"
+      cert_rotation_interval: 2592000  # 30 days
+      key_size: 2048
+      validity_days: 365
+      
+    multi_factor:
+      enabled: false
+      methods:
+        - "totp"
+        - "sms"
+        - "email"
+
+  # Authorization settings
+  authorization:
+    rbac:
+      enabled: true
+      default_roles:
+        - "super_admin"
+        - "admin"
+        - "coordinator"
+        - "agent"
+        - "monitor"
+        - "api_user"
+      permission_cache_ttl: 300  # 5 minutes
+      hierarchical_roles: true
+      dynamic_permissions: true
+      
+    attribute_based:
+      enabled: true
+      policy_engine: "opa"  # Open Policy Agent
+      
+    zero_trust:
+      enabled: true
+      verify_always: true
+      least_privilege: true
+
+  # Logging settings
+  logging:
+    blockchain:
+      enabled: true
+      block_size: 100
+      difficulty: 4
+      storage_path: "/app/blockchain_logs"
+      encryption_enabled: true
+      compression_enabled: true
+      
+    audit:
+      enabled: true
+      log_level: "info"
+      retention_days: 365
+      
+    tamper_detection:
+      enabled: true
+      verification_interval: 3600  # 1 hour
+
+  # Rate limiting settings
+  rate_limiting:
+    enabled: true
+    global_limit: 1000
+    window_seconds: 60
+    burst_limit: 50
+    
+    ddos_protection:
+      enabled: true
+      threshold: 10000
+      mitigation_duration: 300
+      
+    adaptive_limiting:
+      enabled: true
+      base_limit: 1000
+      max_limit: 5000
+      min_limit: 100
+      
+    rules:
+      - name: "Authentication Endpoints"
+        pattern: "/api/auth/*"
+        max_requests: 10
+        window_seconds: 60
+        action: "block"
+        
+      - name: "Admin Endpoints"
+        pattern: "/api/admin/*"
+        max_requests: 50
+        window_seconds: 60
+        action: "block"
+        
+      - name: "API Endpoints"
+        pattern: "/api/*"
+        max_requests: 1000
+        window_seconds: 60
+        action: "throttle"
+
+  # Monitoring settings
+  monitoring:
+    enabled: true
+    mode: "active"  # Options: passive, active, hunting, learning
+    
+    anomaly_detection:
+      enabled: true
+      contamination: 0.1
+      features:
+        - "request_rate"
+        - "error_rate"
+        - "response_time"
+        - "authentication_failures"
+        - "authorization_failures"
+        - "payload_size"
+        - "unique_ips"
+        - "geographic_spread"
+        
+    threat_intelligence:
+      enabled: true
+      sources:
+        - "misp"
+        - "otx"
+        - "virustotal"
+      update_interval: 3600  # 1 hour
+      
+    behavioral_analysis:
+      enabled: true
+      baseline_window: 86400  # 24 hours
+      detection_sensitivity: 0.8
+      
+    alerting:
+      enabled: true
+      channels:
+        email:
+          enabled: false
+          smtp_server: "localhost"
+          smtp_port: 587
+          username: ""
+          password: ""
+          from_address: "alerts@aetherveil-sentinel.com"
+          to_addresses: []
+          
+        webhook:
+          enabled: false
+          url: ""
+          headers: {}
+          timeout: 30
+          
+        syslog:
+          enabled: true
+          host: "localhost"
+          port: 514
+          facility: "local0"
+          
+        slack:
+          enabled: false
+          webhook_url: ""
+          channel: "#security-alerts"
+          
+      escalation:
+        enabled: true
+        levels:
+          - severity: "critical"
+            timeout: 300  # 5 minutes
+          - severity: "high"
+            timeout: 600  # 10 minutes
+          - severity: "medium"
+            timeout: 1800  # 30 minutes
+
+# GCP Integration settings
+gcp:
+  enabled: false
+  project_id: ""
+  credentials_path: ""
+  
+  secret_manager:
+    enabled: false
+    key_rotation_interval: 86400  # 24 hours
+    
+  monitoring:
+    enabled: false
+    
+  cloud_armor:
+    enabled: false
+
+# Network security settings
+network:
+  zmq:
+    enabled: true
+    encryption: true
+    curve_auth: true
+    compression: true
+    
+  tls:
+    min_version: "TLSv1.2"
+    max_version: "TLSv1.3"
+    cipher_suites:
+      - "ECDHE+AESGCM"
+      - "ECDHE+CHACHA20"
+      - "DHE+AESGCM"
+      - "DHE+CHACHA20"
+    
+    security_level: "high"  # Options: low, medium, high, critical
+    
+  firewall:
+    enabled: true
+    default_policy: "deny"
+    allowed_ports:
+      - 443
+      - 8443
+      - 5555  # ZMQ
+      
+  proxy:
+    enabled: false
+    reverse_proxy: false
+    load_balancer: false
+
+# Compliance settings
+compliance:
+  gdpr:
+    enabled: false
+    data_retention_days: 365
+    
+  hipaa:
+    enabled: false
+    
+  pci_dss:
+    enabled: false
+    
+  sox:
+    enabled: false
+
+# Advanced security features
+advanced:
+  honeypots:
+    enabled: false
+    
+  deception:
+    enabled: false
+    
+  sandboxing:
+    enabled: false
+    
+  threat_hunting:
+    enabled: false
+    
+  forensics:
+    enabled: true
+    retention_days: 90
+    
+  backup_encryption:
+    enabled: true
+    algorithm: "AES-256-GCM"
+    
+  secure_boot:
+    enabled: false
+    
+  hardware_security:
+    enabled: false
+    hsm_integration: false
+
+# Development/Testing settings
+development:
+  debug_mode: false
+  test_mode: false
+  mock_external_services: false
+  bypass_security: false  # NEVER set to true in production
+  
+  test_certificates:
+    enabled: false
+    
+  insecure_transport:
+    enabled: false  # NEVER set to true in production

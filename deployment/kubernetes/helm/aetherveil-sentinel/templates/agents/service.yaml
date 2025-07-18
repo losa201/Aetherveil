@@ -1,0 +1,35 @@
+{{- range $agentType, $agent := .Values.agents }}
+{{- if $agent.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aetherveil-sentinel.fullname" $ }}-agent-{{ $agentType }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "aetherveil-sentinel.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/agent-type: {{ $agentType }}
+  annotations:
+    {{- if $.Values.monitoring.serviceMonitor.enabled }}
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+    {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: 9090
+      protocol: TCP
+      name: metrics
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: health
+  selector:
+    {{- include "aetherveil-sentinel.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: agent
+    app.kubernetes.io/agent-type: {{ $agentType }}
+{{- end }}
+{{- end }}

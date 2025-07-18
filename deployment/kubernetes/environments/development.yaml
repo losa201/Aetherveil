@@ -1,0 +1,193 @@
+# Development environment values for Aetherveil Sentinel
+# This file contains settings specific to development environment
+
+# Global settings
+global:
+  imageRegistry: "localhost:5000"
+  imagePullSecrets: []
+
+# Development configuration
+development:
+  enabled: true
+  debug: true
+  profiling: true
+  
+  # Local development
+  local:
+    enabled: true
+    hostPath: "/tmp/aetherveil"
+    
+  # Test environment
+  test:
+    enabled: true
+    mockServices: true
+
+# Common configuration
+common:
+  image:
+    tag: "dev-latest"
+    pullPolicy: Always
+  
+  # Reduced resource limits for development
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# Coordinator configuration
+coordinator:
+  replicaCount: 1
+  
+  # Disable autoscaling in development
+  autoscaling:
+    enabled: false
+    
+  # Disable pod disruption budget
+  podDisruptionBudget:
+    enabled: false
+    
+  # Disable persistence for development
+  persistence:
+    enabled: false
+
+# Agent configurations with reduced replicas
+agents:
+  reconnaissance:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+        
+  scanner:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+        
+  exploiter:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+        
+  osint:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+        
+  stealth:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+# Use lightweight dependencies for development
+redis:
+  master:
+    persistence:
+      enabled: false
+  replica:
+    replicaCount: 1
+    persistence:
+      enabled: false
+
+postgresql:
+  primary:
+    persistence:
+      enabled: false
+  readReplicas:
+    replicaCount: 0
+
+# Simplified monitoring for development
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+  alertRules:
+    enabled: false
+  dashboards:
+    enabled: false
+
+# Simplified security for development
+security:
+  enabled: true
+  networkPolicy:
+    enabled: false
+  podSecurityPolicy:
+    enabled: false
+  tls:
+    enabled: false
+  certificates:
+    enabled: false
+  rbac:
+    enabled: true
+
+# Disable backup in development
+backup:
+  enabled: false
+
+# Simplified logging
+logging:
+  level: DEBUG
+  aggregation:
+    enabled: false
+  shipping:
+    enabled: false
+
+# Disable tracing in development
+tracing:
+  enabled: false
+
+# Disable external integrations in development
+integrations:
+  slack:
+    enabled: false
+  email:
+    enabled: false
+  webhook:
+    enabled: false
+  apis:
+    shodan:
+      enabled: false
+    virustotal:
+      enabled: false
+    censys:
+      enabled: false

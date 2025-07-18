@@ -1,0 +1,959 @@
+# GCP Cloud Run Deployment Configuration for Aetherveil Sentinel
+# Provides serverless, auto-scaling deployment with Cloud Run + Pub/Sub
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-coordinator
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil Sentinel Coordinator Service"
+    run.googleapis.com/ingress: "internal-and-cloud-load-balancing"
+    run.googleapis.com/execution-environment: "gen2"
+    run.googleapis.com/cpu-boost: "true"
+    run.googleapis.com/sessionAffinity: "true"
+    run.googleapis.com/network-interfaces: '[{"network":"aetherveil-vpc","subnetwork":"aetherveil-subnet"}]'
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "private-ranges-only"
+        run.googleapis.com/execution-environment: "gen2"
+        run.googleapis.com/startup-cpu-boost: "true"
+        run.googleapis.com/cpu-throttling: "false"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/memory: "4Gi"
+        run.googleapis.com/cpu: "2"
+        run.googleapis.com/timeout: "3600s"
+        run.googleapis.com/service-account: "aetherveil-coordinator@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 100
+      timeoutSeconds: 3600
+      serviceAccountName: aetherveil-coordinator@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-coordinator:latest
+        name: coordinator
+        ports:
+        - containerPort: 8080
+          name: http1
+        - containerPort: 50051
+          name: grpc
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: GCP_PROJECT_ID
+          value: "PROJECT_ID"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "PROJECT_ID"
+        - name: REDIS_URL
+          value: "redis://10.0.0.10:6379"
+        - name: NEO4J_URI
+          value: "bolt://10.0.0.11:7687"
+        - name: NEO4J_USER
+          value: "neo4j"
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: neo4j-credentials
+              key: password
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aetherveil-secrets
+              key: encryption_key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: aetherveil-secrets
+              key: jwt_secret
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: openai_api_key
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: anthropic_api_key
+        - name: SHODAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: shodan_api_key
+        - name: CENSYS_API_ID
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: censys_api_id
+        - name: CENSYS_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: censys_api_secret
+        - name: VIRUSTOTAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: virustotal_api_key
+        - name: GRPC_PORT
+          value: "50051"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: ENABLE_MTLS
+          value: "true"
+        - name: ENABLE_AUDIT_LOGGING
+          value: "true"
+        - name: ENABLE_MONITORING
+          value: "true"
+        - name: ENABLE_TRACING
+          value: "true"
+        - name: PUBSUB_TOPIC_PREFIX
+          value: "aetherveil"
+        - name: CLOUD_SQL_CONNECTION_NAME
+          value: "PROJECT_ID:us-central1:aetherveil-db"
+        - name: SPANNER_INSTANCE
+          value: "aetherveil-instance"
+        - name: SPANNER_DATABASE
+          value: "aetherveil-db"
+        - name: BIGTABLE_INSTANCE
+          value: "aetherveil-bigtable"
+        - name: CLOUD_STORAGE_BUCKET
+          value: "aetherveil-storage-PROJECT_ID"
+        - name: CLOUD_KMS_KEY_RING
+          value: "aetherveil-keys"
+        - name: CLOUD_KMS_CRYPTO_KEY
+          value: "aetherveil-encryption-key"
+        - name: CLOUD_MONITORING_ENABLED
+          value: "true"
+        - name: CLOUD_LOGGING_ENABLED
+          value: "true"
+        - name: CLOUD_TRACE_ENABLED
+          value: "true"
+        - name: CLOUD_PROFILER_ENABLED
+          value: "true"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: var-log-volume
+          mountPath: /var/log
+        - name: certificates
+          mountPath: /app/certificates
+          readOnly: true
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: var-log-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: certificates
+        secret:
+          secretName: aetherveil-certificates
+      - name: config
+        configMap:
+          name: aetherveil-config
+
+---
+# Agent Services Configuration
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-reconnaissance-agent
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil Reconnaissance Agent"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "private-ranges-only"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "20"
+        run.googleapis.com/memory: "1Gi"
+        run.googleapis.com/cpu: "500m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 50
+      timeoutSeconds: 1800
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-reconnaissance-agent:latest
+        name: reconnaissance-agent
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: AGENT_TYPE
+          value: "reconnaissance"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/reconnaissance-tasks"
+        - name: REDIS_URL
+          value: "redis://10.0.0.10:6379"
+        - name: ENABLE_MTLS
+          value: "true"
+        - name: ENABLE_BEHAVIORAL_MIMICRY
+          value: "true"
+        - name: STEALTH_LEVEL
+          value: "3"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-scanner-agent
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil Scanner Agent"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "private-ranges-only"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "15"
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "1000m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 25
+      timeoutSeconds: 3600
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-scanner-agent:latest
+        name: scanner-agent
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: AGENT_TYPE
+          value: "scanner"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/scanner-tasks"
+        - name: NUCLEI_TEMPLATES_DIR
+          value: "/app/nuclei-templates"
+        - name: ENABLE_NUCLEI
+          value: "true"
+        - name: ENABLE_NMAP
+          value: "true"
+        - name: ENABLE_CUSTOM_SCANNERS
+          value: "true"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-osint-agent
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil OSINT Agent"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "all"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/memory: "1Gi"
+        run.googleapis.com/cpu: "500m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 30
+      timeoutSeconds: 1800
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-osint-agent:latest
+        name: osint-agent
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: AGENT_TYPE
+          value: "osint"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/osint-tasks"
+        - name: SHODAN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: shodan_api_key
+        - name: CENSYS_API_ID
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: censys_api_id
+        - name: CENSYS_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: censys_api_secret
+        - name: VIRUSTOTAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: virustotal_api_key
+        - name: ABUSEIPDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: abuseipdb_api_key
+        - name: GREYNOISE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: greynoise_api_key
+        - name: ALIENVAULT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: alienvault_api_key
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-stealth-agent
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil Stealth Agent"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "all"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/memory: "1Gi"
+        run.googleapis.com/cpu: "500m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 20
+      timeoutSeconds: 3600
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-stealth-agent:latest
+        name: stealth-agent
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: AGENT_TYPE
+          value: "stealth"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/stealth-tasks"
+        - name: ENABLE_TOR
+          value: "true"
+        - name: ENABLE_PROXY_CHAINS
+          value: "true"
+        - name: ENABLE_BEHAVIORAL_MIMICRY
+          value: "true"
+        - name: ENABLE_HONEYPOT_DETECTION
+          value: "true"
+        - name: STEALTH_LEVEL
+          value: "5"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-report-generator
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil Report Generator"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "all"
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/memory: "2Gi"
+        run.googleapis.com/cpu: "1000m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 10
+      timeoutSeconds: 1800
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-report-generator:latest
+        name: report-generator
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: SERVICE_TYPE
+          value: "report_generator"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/report-generation-tasks"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: openai_api_key
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: anthropic_api_key
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: google_api_key
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: groq_api_key
+        - name: CLOUD_STORAGE_BUCKET
+          value: "aetherveil-reports-PROJECT_ID"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: aetherveil-rl-agent
+  namespace: default
+  annotations:
+    run.googleapis.com/description: "Aetherveil RL Agent"
+    run.googleapis.com/ingress: "internal"
+    run.googleapis.com/execution-environment: "gen2"
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/vpc-access-connector: "projects/PROJECT_ID/locations/us-central1/connectors/aetherveil-vpc-connector"
+        run.googleapis.com/vpc-access-egress: "private-ranges-only"
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "3"
+        run.googleapis.com/memory: "8Gi"
+        run.googleapis.com/cpu: "4000m"
+        run.googleapis.com/service-account: "aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com"
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 3600
+      serviceAccountName: aetherveil-agent@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+      - image: gcr.io/PROJECT_ID/aetherveil-rl-agent:latest
+        name: rl-agent
+        ports:
+        - containerPort: 8080
+          name: http1
+        env:
+        - name: AGENT_TYPE
+          value: "rl"
+        - name: COORDINATOR_URL
+          value: "https://aetherveil-coordinator-hash-uc.a.run.app"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "projects/PROJECT_ID/subscriptions/rl-training-tasks"
+        - name: ENABLE_GPU
+          value: "true"
+        - name: ENABLE_META_LEARNING
+          value: "true"
+        - name: ENABLE_ADVERSARIAL_TRAINING
+          value: "true"
+        - name: ENABLE_CURRICULUM_LEARNING
+          value: "true"
+        - name: CLOUD_STORAGE_BUCKET
+          value: "aetherveil-models-PROJECT_ID"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+---
+# Pub/Sub Topics Configuration
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pubsub-topics-config
+  namespace: default
+data:
+  topics.yaml: |
+    topics:
+      - name: "aetherveil-reconnaissance-tasks"
+        description: "Reconnaissance tasks for agents"
+        messageRetentionDuration: "604800s"  # 7 days
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/reconnaissance-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-scanner-tasks"
+        description: "Scanner tasks for agents"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/scanner-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-osint-tasks"
+        description: "OSINT tasks for agents"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/osint-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-stealth-tasks"
+        description: "Stealth tasks for agents"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/stealth-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-report-generation-tasks"
+        description: "Report generation tasks"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/report-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-rl-training-tasks"
+        description: "RL training tasks"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/rl-task-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-task-results"
+        description: "Task results from agents"
+        messageRetentionDuration: "604800s"
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/task-result-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-threat-intelligence"
+        description: "Threat intelligence updates"
+        messageRetentionDuration: "2592000s"  # 30 days
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/threat-intelligence-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-audit-logs"
+        description: "Audit logs for compliance"
+        messageRetentionDuration: "7776000s"  # 90 days
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/audit-log-schema"
+          encoding: "JSON"
+      
+      - name: "aetherveil-system-metrics"
+        description: "System metrics and monitoring"
+        messageRetentionDuration: "604800s"  # 7 days
+        messageStoragePolicy:
+          allowedPersistenceRegions:
+            - "us-central1"
+            - "us-east1"
+        schemaSettings:
+          schema: "projects/PROJECT_ID/schemas/metrics-schema"
+          encoding: "JSON"
+
+    subscriptions:
+      - name: "reconnaissance-tasks"
+        topic: "aetherveil-reconnaissance-tasks"
+        ackDeadlineSeconds: 600
+        retryPolicy:
+          minimumBackoff: "10s"
+          maximumBackoff: "600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 5
+        enableMessageOrdering: true
+        filter: 'attributes.agent_type="reconnaissance"'
+      
+      - name: "scanner-tasks"
+        topic: "aetherveil-scanner-tasks"
+        ackDeadlineSeconds: 1200
+        retryPolicy:
+          minimumBackoff: "10s"
+          maximumBackoff: "600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 5
+        enableMessageOrdering: true
+        filter: 'attributes.agent_type="scanner"'
+      
+      - name: "osint-tasks"
+        topic: "aetherveil-osint-tasks"
+        ackDeadlineSeconds: 600
+        retryPolicy:
+          minimumBackoff: "10s"
+          maximumBackoff: "600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 5
+        enableMessageOrdering: true
+        filter: 'attributes.agent_type="osint"'
+      
+      - name: "stealth-tasks"
+        topic: "aetherveil-stealth-tasks"
+        ackDeadlineSeconds: 1200
+        retryPolicy:
+          minimumBackoff: "10s"
+          maximumBackoff: "600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 5
+        enableMessageOrdering: true
+        filter: 'attributes.agent_type="stealth"'
+      
+      - name: "report-generation-tasks"
+        topic: "aetherveil-report-generation-tasks"
+        ackDeadlineSeconds: 600
+        retryPolicy:
+          minimumBackoff: "10s"
+          maximumBackoff: "600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 3
+        enableMessageOrdering: false
+        filter: 'attributes.task_type="report_generation"'
+      
+      - name: "rl-training-tasks"
+        topic: "aetherveil-rl-training-tasks"
+        ackDeadlineSeconds: 3600
+        retryPolicy:
+          minimumBackoff: "60s"
+          maximumBackoff: "3600s"
+        deadLetterPolicy:
+          deadLetterTopic: "projects/PROJECT_ID/topics/aetherveil-dead-letter"
+          maxDeliveryAttempts: 3
+        enableMessageOrdering: false
+        filter: 'attributes.task_type="rl_training"'
+
+---
+# Load Balancer Configuration
+
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: aetherveil-ssl-cert
+  namespace: default
+spec:
+  domains:
+    - aetherveil.example.com
+    - api.aetherveil.example.com
+    - dashboard.aetherveil.example.com
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aetherveil-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "aetherveil-ip"
+    networking.gke.io/managed-certificates: "aetherveil-ssl-cert"
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.allow-http: "false"
+    ingress.gcp.kubernetes.io/load-balancer-type: "External"
+    cloud.google.com/armor-config: '{"aetherveil-security-policy": "aetherveil-armor-policy"}'
+    cloud.google.com/backend-config: '{"default": "aetherveil-backend-config"}'
+spec:
+  rules:
+  - host: aetherveil.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aetherveil-coordinator
+            port:
+              number: 80
+  - host: api.aetherveil.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aetherveil-coordinator
+            port:
+              number: 80
+  - host: dashboard.aetherveil.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aetherveil-web-dashboard
+            port:
+              number: 80
+
+---
+# Backend Configuration
+
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: aetherveil-backend-config
+  namespace: default
+spec:
+  healthCheck:
+    checkIntervalSec: 10
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 8080
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 3600
+  timeoutSec: 30
+  connectionDraining:
+    drainingTimeoutSec: 60
+  logging:
+    enable: true
+    sampleRate: 1.0
+  securityPolicy:
+    name: "aetherveil-armor-policy"
+  iap:
+    enabled: true
+    oauthclientCredentials:
+      secretName: "aetherveil-iap-secret"
+
+---
+# Horizontal Pod Autoscaler for Cloud Run
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aetherveil-coordinator-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: serving.knative.dev/v1
+    kind: Service
+    name: aetherveil-coordinator
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: pubsub.googleapis.com/subscription/num_undelivered_messages
+      target:
+        type: AverageValue
+        averageValue: "10"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
