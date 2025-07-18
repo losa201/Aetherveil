@@ -34,9 +34,12 @@ common:
     readOnlyRootFilesystem: true
     runAsNonRoot: true
     runAsUser: 1000
+    runAsGroup: 1000
     capabilities:
       drop:
         - ALL
+    seccompProfile:
+      type: RuntimeDefault
         
   # Resource limits
   resources:
@@ -364,13 +367,20 @@ monitoring:
 security:
   enabled: true
   
+  # Pod Security Standards
+  podSecurityStandards:
+    enabled: true
+    enforce: "restricted"
+    audit: "restricted"
+    warn: "restricted"
+    
   # Network policies
   networkPolicy:
     enabled: true
     
-  # Pod security policies
+  # Pod security policies (deprecated, use PSS)
   podSecurityPolicy:
-    enabled: true
+    enabled: false
     
   # TLS configuration
   tls:

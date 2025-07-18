@@ -1,0 +1,99 @@
+# Build context optimization for Aetherveil Sentinel
+**/.git
+**/.github
+**/.gitignore
+**/.dockerignore
+**/Dockerfile*
+**/docker-compose*.yml
+**/README.md
+**/CHANGELOG.md
+**/LICENSE
+
+# Development files
+**/.vscode
+**/.idea
+**/*.swp
+**/*.swo
+**/*~
+**/.DS_Store
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Test files
+**/tests/
+**/test_*.py
+**/*_test.py
+**/pytest.ini
+**/tox.ini
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/coverage.xml
+
+# Documentation
+**/docs/
+**/*.md
+**/*.rst
+**/*.txt
+!requirements.txt
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/env/
+**/venv/
+**/ENV/
+**/env.bak/
+**/venv.bak/
+**/.mypy_cache/
+**/.pytest_cache/
+
+# Build artifacts
+**/build/
+**/dist/
+**/*.egg-info/
+**/*.egg
+
+# Logs and temporary files
+**/logs/
+**/*.log
+**/tmp/
+**/temp/
+**/*.tmp
+**/*.temp
+
+# IDE files
+**/.vscode/
+**/.idea/
+**/*.sublime-*
+**/*.code-workspace
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+**/desktop.ini
+
+# Security scanning results
+**/*-report.json
+**/*-report.xml
+**/*-report.html
+**/security-*.json
+**/bandit-*.json
+**/safety-*.json
+
+# Kubernetes manifests (not needed in container)
+**/deployment/kubernetes/
+**/helm/
+**/*.yaml
+**/*.yml
+!docker-compose*.yml
+
+# Backup files
+**/*.bak
+**/*.backup
+**/*.old
+**/*.orig

@@ -1,0 +1,66 @@
+# Gitleaks configuration for Aetherveil Sentinel
+[extend]
+# Use the default base configuration
+useDefault = true
+
+[allowlist]
+# Allow test files and example configs
+paths = [
+  ".*test.*",
+  ".*example.*",
+  ".*demo.*",
+  ".*/fixtures/.*",
+  ".*/mocks/.*"
+]
+
+# Allow specific patterns that are safe
+regexes = [
+  "password.*=.*test",
+  "key.*=.*test",
+  "token.*=.*test",
+  "secret.*=.*test",
+  "api.*key.*=.*test"
+]
+
+# Custom rules for security tools
+[[rules]]
+id = "shodan-api-key"
+description = "Shodan API Key"
+regex = '''(?i)shodan[_-]?api[_-]?key[_-]?[=:]\s*['"]*([a-zA-Z0-9]{32})['"]*'''
+keywords = ["shodan", "api", "key"]
+
+[[rules]]
+id = "censys-api-key"
+description = "Censys API Key"
+regex = '''(?i)censys[_-]?api[_-]?key[_-]?[=:]\s*['"]*([a-zA-Z0-9-]{36})['"]*'''
+keywords = ["censys", "api", "key"]
+
+[[rules]]
+id = "virustotal-api-key"
+description = "VirusTotal API Key"
+regex = '''(?i)virustotal[_-]?api[_-]?key[_-]?[=:]\s*['"]*([a-zA-Z0-9]{64})['"]*'''
+keywords = ["virustotal", "api", "key"]
+
+[[rules]]
+id = "gcp-service-account"
+description = "GCP Service Account Key"
+regex = '''(?i)type['"]*\s*:\s*['"]*service_account['"]*'''
+keywords = ["service_account", "private_key", "client_email"]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT Secret Key"
+regex = '''(?i)jwt[_-]?secret[_-]?key[_-]?[=:]\s*['"]*([a-zA-Z0-9+/]{32,})['"]*'''
+keywords = ["jwt", "secret", "key"]
+
+[[rules]]
+id = "redis-password"
+description = "Redis Password"
+regex = '''(?i)redis[_-]?password[_-]?[=:]\s*['"]*([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?~`]{8,})['"]*'''
+keywords = ["redis", "password"]
+
+[[rules]]
+id = "neo4j-password"
+description = "Neo4j Password"
+regex = '''(?i)neo4j[_-]?password[_-]?[=:]\s*['"]*([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?~`]{8,})['"]*'''
+keywords = ["neo4j", "password"]
