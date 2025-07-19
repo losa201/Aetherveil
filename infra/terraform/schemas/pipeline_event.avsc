@@ -1,0 +1,105 @@
+{
+  "type": "record",
+  "name": "PipelineEvent",
+  "namespace": "com.aetherveil.events",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Unique identifier for the event"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Event timestamp in milliseconds"
+    },
+    {
+      "name": "event_type",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["WORKFLOW_STARTED", "WORKFLOW_COMPLETED", "WORKFLOW_FAILED", "JOB_STARTED", "JOB_COMPLETED", "JOB_FAILED", "STEP_STARTED", "STEP_COMPLETED", "STEP_FAILED"]
+      },
+      "doc": "Type of pipeline event"
+    },
+    {
+      "name": "repository",
+      "type": "string",
+      "doc": "Repository name (org/repo)"
+    },
+    {
+      "name": "workflow_name",
+      "type": "string",
+      "doc": "Name of the GitHub Actions workflow"
+    },
+    {
+      "name": "workflow_run_id",
+      "type": "long",
+      "doc": "GitHub workflow run ID"
+    },
+    {
+      "name": "job_name",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Name of the job (if applicable)"
+    },
+    {
+      "name": "step_name",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Name of the step (if applicable)"
+    },
+    {
+      "name": "branch",
+      "type": "string",
+      "doc": "Git branch name"
+    },
+    {
+      "name": "commit_sha",
+      "type": "string",
+      "doc": "Git commit SHA"
+    },
+    {
+      "name": "actor",
+      "type": "string",
+      "doc": "User who triggered the workflow"
+    },
+    {
+      "name": "environment",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Deployment environment (if applicable)"
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "Status",
+        "symbols": ["SUCCESS", "FAILURE", "CANCELLED", "IN_PROGRESS", "QUEUED"]
+      },
+      "doc": "Status of the event"
+    },
+    {
+      "name": "duration_seconds",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Duration in seconds (for completed events)"
+    },
+    {
+      "name": "error_message",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Error message (if failed)"
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Additional metadata"
+    }
+  ]
+}

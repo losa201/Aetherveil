@@ -1,0 +1,47 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+      - '-f'
+      - 'deployment/docker/self-healing-engine/Dockerfile'
+      - '.'
+
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+
+# Store images in Artifact Registry
+images:
+  - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+  - 'us-central1-docker.pkg.dev/tidy-computing-465909-i3/aetherveil/self-healing-engine:latest'
+
+# Build timeout (20 minutes)
+timeout: '1200s'
+
+options:
+  # Use high-performance machine type for faster builds
+  machineType: 'E2_HIGHCPU_8'
+  # Enable concurrent builds
+  substitutionOption: 'ALLOW_LOOSE'
+  # Enable build logs
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _AGENT_NAME: 'self-healing-engine'
+  _AGENT_PATH: 'agents/self_healing_engine'
+  _PROJECT_ID: 'tidy-computing-465909-i3'
+  _REGION: 'us-central1'
+  _REPOSITORY: 'aetherveil'
+  _IMAGE_TAG: 'latest'

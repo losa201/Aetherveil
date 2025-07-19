@@ -1,0 +1,66 @@
+steps:
+  # Build the Discovery Agent container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-discovery-agent'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:latest'
+      - '-f'
+      - 'deployment/docker/discovery-agent/Dockerfile'
+      - '.'
+
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-discovery-agent'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:${_IMAGE_TAG}'
+    waitFor: ['build-discovery-agent']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-discovery-agent-latest'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:latest'
+    waitFor: ['build-discovery-agent']
+
+  # Security scan the container image
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'scan-discovery-agent'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🔍 Scanning Discovery Agent image..."
+        gcloud artifacts docker images scan \
+          ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:${_IMAGE_TAG} \
+          --location=${_REGION} || echo "Scan completed with warnings"
+    waitFor: ['push-discovery-agent']
+
+# Store images in Artifact Registry
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:${_IMAGE_TAG}'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/discovery-agent:latest'
+
+# Build timeout
+timeout: '1200s'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  substitutionOption: 'ALLOW_LOOSE'
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _AGENT_NAME: 'discovery-agent'
+  _PROJECT_ID: 'tidy-computing-465909-i3'
+  _REGION: 'us-central1'
+  _REPOSITORY: 'aetherveil'
+  _IMAGE_TAG: 'latest'
+
+tags:
+  - 'aetherveil'
+  - 'security'
+  - 'discovery'

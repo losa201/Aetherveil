@@ -1,0 +1,119 @@
+---
+# High Pipeline Failure Rate Alert
+alertPolicy:
+  displayName: "High Pipeline Failure Rate"
+  documentation:
+    content: "Pipeline failure rate has exceeded acceptable thresholds"
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Pipeline Failure Rate > 20%"
+      conditionThreshold:
+        filter: 'metric.type="custom.googleapis.com/aetherveil/pipeline_failure_rate"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 0.2
+        duration: "300s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: ALIGN_MEAN
+            crossSeriesReducer: REDUCE_MEAN
+  alertStrategy:
+    autoClose: "86400s"  # 24 hours
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+
+---
+# Anomaly Detection System Down
+alertPolicy:
+  displayName: "Anomaly Detection System Down"
+  documentation:
+    content: "The anomaly detection agent is not responding"
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Anomaly Detector Health Check Failed"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" AND resource.labels.service_name="anomaly-detector" AND metric.type="run.googleapis.com/container/instance_count"'
+        comparison: COMPARISON_EQUAL
+        thresholdValue: 0
+        duration: "180s"
+        aggregations:
+          - alignmentPeriod: "60s"
+            perSeriesAligner: ALIGN_MEAN
+            crossSeriesReducer: REDUCE_SUM
+  alertStrategy:
+    autoClose: "3600s"  # 1 hour
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+
+---
+# Self-Healing System Overwhelmed
+alertPolicy:
+  displayName: "Self-Healing System Overwhelmed"
+  documentation:
+    content: "Self-healing engine is processing too many failures"
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "High Healing Action Rate"
+      conditionThreshold:
+        filter: 'metric.type="custom.googleapis.com/aetherveil/healing_actions_per_minute"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 10
+        duration: "600s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_SUM
+  alertStrategy:
+    autoClose: "7200s"  # 2 hours
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+
+---
+# Critical Error Rate Spike
+alertPolicy:
+  displayName: "Critical Error Rate Spike"
+  documentation:
+    content: "Critical errors detected in pipeline logs"
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Critical Log Errors > Threshold"
+      conditionThreshold:
+        filter: 'resource.type="cloud_run_revision" AND severity="ERROR"'
+        comparison: COMPARISON_GREATER_THAN
+        thresholdValue: 5
+        duration: "300s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: ALIGN_RATE
+            crossSeriesReducer: REDUCE_SUM
+  alertStrategy:
+    autoClose: "3600s"  # 1 hour
+  combiner: OR
+  enabled: true
+  notificationChannels: []
+
+---
+# ML Model Performance Degradation
+alertPolicy:
+  displayName: "ML Model Performance Degradation"
+  documentation:
+    content: "Machine learning model accuracy has dropped significantly"
+    mimeType: "text/markdown"
+  conditions:
+    - displayName: "Model Accuracy < 80%"
+      conditionThreshold:
+        filter: 'metric.type="custom.googleapis.com/aetherveil/model_accuracy"'
+        comparison: COMPARISON_LESS_THAN
+        thresholdValue: 0.8
+        duration: "600s"
+        aggregations:
+          - alignmentPeriod: "300s"
+            perSeriesAligner: ALIGN_MEAN
+            crossSeriesReducer: REDUCE_MEAN
+  alertStrategy:
+    autoClose: "86400s"  # 24 hours
+  combiner: OR
+  enabled: true
+  notificationChannels: []

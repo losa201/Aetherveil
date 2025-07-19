@@ -1,0 +1,9 @@
+aiohttp==3.9.1
+dnspython==2.4.2
+google-cloud-pubsub==2.18.4
+google-cloud-firestore==2.13.1
+requests==2.31.0
+asyncio==3.4.3
+ipaddress==1.0.23
+urllib3==2.1.0
+certifi==2023.11.17

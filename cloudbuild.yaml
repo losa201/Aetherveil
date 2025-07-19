@@ -1,0 +1,188 @@
+# Aetherveil Autonomous AI DevOps Platform - Master Cloud Build Configuration
+# Builds all agent containers in parallel for optimal performance
+
+steps:
+  # Phase 1 Agents - Parallel Build
+  
+  # Pipeline Observer Agent
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-pipeline-observer'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:latest'
+      - '-f'
+      - 'deployment/docker/pipeline-observer/Dockerfile'
+      - '.'
+    waitFor: ['-']  # Run immediately
+    
+  # Anomaly Detector Agent  
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-anomaly-detector'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:latest'
+      - '-f'
+      - 'deployment/docker/anomaly-detector/Dockerfile'
+      - '.'
+    waitFor: ['-']  # Run immediately
+    
+  # Self-Healing Engine Agent
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-self-healing-engine'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:latest'
+      - '-f'
+      - 'deployment/docker/self-healing-engine/Dockerfile'
+      - '.'
+    waitFor: ['-']  # Run immediately
+    
+  # Phase 2 Agents
+  
+  # ADO Orchestrator Agent (only if Phase 2 enabled)
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-ado-orchestrator'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:${_IMAGE_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:latest'
+      - '-f'
+      - 'deployment/docker/ado-orchestrator/Dockerfile'
+      - '.'
+    waitFor: ['-']  # Run immediately
+    
+  # Push Phase 1 Images
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-pipeline-observer'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:${_IMAGE_TAG}'
+    waitFor: ['build-pipeline-observer']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-pipeline-observer-latest'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:latest'
+    waitFor: ['build-pipeline-observer']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-anomaly-detector'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:${_IMAGE_TAG}'
+    waitFor: ['build-anomaly-detector']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-anomaly-detector-latest'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:latest'
+    waitFor: ['build-anomaly-detector']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-self-healing-engine'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:${_IMAGE_TAG}'
+    waitFor: ['build-self-healing-engine']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-self-healing-engine-latest'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:latest'
+    waitFor: ['build-self-healing-engine']
+    
+  # Push Phase 2 Images
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-ado-orchestrator'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:${_IMAGE_TAG}'
+    waitFor: ['build-ado-orchestrator']
+    
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-ado-orchestrator-latest'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:latest'
+    waitFor: ['build-ado-orchestrator']
+    
+  # Vulnerability Scanning (optional security step)
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'scan-images'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🔍 Starting vulnerability scanning..."
+        for image in pipeline-observer anomaly-detector self-healing-engine ado-orchestrator; do
+          echo "Scanning $$image..."
+          gcloud artifacts docker images scan \
+            ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/$$image:${_IMAGE_TAG} \
+            --location=${_REGION} || echo "Scan failed for $$image, continuing..."
+        done
+        echo "✅ Vulnerability scanning completed"
+    waitFor: 
+      - 'push-pipeline-observer'
+      - 'push-anomaly-detector' 
+      - 'push-self-healing-engine'
+      - 'push-ado-orchestrator'
+
+# Images to be stored in Artifact Registry
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:${_IMAGE_TAG}'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/pipeline-observer:latest'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:${_IMAGE_TAG}'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/anomaly-detector:latest'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:${_IMAGE_TAG}'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/self-healing-engine:latest'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:${_IMAGE_TAG}'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/ado-orchestrator:latest'
+
+# Build timeout (30 minutes)
+timeout: '1800s'
+
+# Build options for performance and reliability
+options:
+  # Use high-performance machine for faster parallel builds
+  machineType: 'E2_HIGHCPU_32'
+  
+  # Allocate sufficient disk space for concurrent builds
+  diskSizeGb: 100
+  
+  # Enable detailed logging
+  logging: CLOUD_LOGGING_ONLY
+  
+  # Substitute variables dynamically
+  substitutionOption: 'ALLOW_LOOSE'
+  
+  # Use worker pool for consistent builds (optional)
+  # pool:
+  #   name: 'projects/${_PROJECT_ID}/locations/${_REGION}/workerPools/aetherveil-pool'
+
+# Default substitution variables
+substitutions:
+  _PROJECT_ID: 'tidy-computing-465909-i3'
+  _REGION: 'us-central1'
+  _REPOSITORY: 'aetherveil'
+  _IMAGE_TAG: 'latest'
+  
+# Build tags for organization
+tags:
+  - 'aetherveil'
+  - 'autonomous-devops'
+  - 'ai-platform'
+  - 'phase-${_PHASE:-all}'

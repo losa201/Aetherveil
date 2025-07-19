@@ -1,0 +1,330 @@
+# Deploy Autonomous AI-Powered DevOps Platform
+name: Deploy Autonomous Platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agents/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-autonomous-platform.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_phase:
+        description: 'Deployment phase (1, 2, 3, or all)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - 'all'
+
+env:
+  PROJECT_ID: tidy-computing-465909-i3
+  REGION: us-central1
+  TERRAFORM_VERSION: 1.7.0
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    name: Terraform Plan
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      plan_output: ${{ steps.plan.outputs.stdout }}
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+    
+    - name: Create Terraform state bucket
+      run: |
+        gsutil mb gs://aetherveil-terraform-state-${{ env.PROJECT_ID }} || true
+        gsutil versioning set on gs://aetherveil-terraform-state-${{ env.PROJECT_ID }}
+    
+    - name: Terraform Init
+      working-directory: infra/terraform
+      run: |
+        terraform init \
+          -backend-config="bucket=aetherveil-terraform-state-${{ env.PROJECT_ID }}"
+    
+    - name: Terraform Plan
+      id: plan
+      working-directory: infra/terraform
+      run: |
+        terraform plan \
+          -var="project_id=${{ env.PROJECT_ID }}" \
+          -var="region=${{ env.REGION }}" \
+          -var="deploy_phase_1=true" \
+          -var="deploy_phase_2=${{ github.event.inputs.deploy_phase == '2' || github.event.inputs.deploy_phase == 'all' }}" \
+          -var="deploy_phase_3=${{ github.event.inputs.deploy_phase == '3' || github.event.inputs.deploy_phase == 'all' }}" \
+          -out=tfplan
+    
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: infra/terraform/tfplan
+
+  build-ai-agents:
+    runs-on: ubuntu-latest
+    name: Build AI Agent Images
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        agent: [pipeline-observer, anomaly-detector, self-healing-engine]
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Artifact Registry
+      uses: docker/login-action@v3
+      with:
+        registry: us-central1-docker.pkg.dev
+        username: oauth2accesstoken
+        password: ${{ steps.auth.outputs.access_token }}
+    
+    - name: Build and push ${{ matrix.agent }} image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./deployment/docker/${{ matrix.agent }}/Dockerfile
+        push: true
+        tags: |
+          us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/aetherveil/${{ matrix.agent }}:${{ github.sha }}
+          us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/aetherveil/${{ matrix.agent }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+  terraform-apply:
+    runs-on: ubuntu-latest
+    name: Deploy Infrastructure
+    needs: [terraform-plan, build-ai-agents]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    environment: production
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+    
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+        path: infra/terraform/
+    
+    - name: Terraform Init
+      working-directory: infra/terraform
+      run: |
+        terraform init \
+          -backend-config="bucket=aetherveil-terraform-state-${{ env.PROJECT_ID }}"
+    
+    - name: Terraform Apply
+      working-directory: infra/terraform
+      run: terraform apply -auto-approve tfplan
+
+  setup-bigquery-ml:
+    runs-on: ubuntu-latest
+    name: Setup BigQuery ML Models
+    needs: terraform-apply
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+    
+    - name: Create BigQuery ML Models
+      run: |
+        # Create anomaly detection model
+        bq query --use_legacy_sql=false "
+        CREATE OR REPLACE MODEL \`${{ env.PROJECT_ID }}.ml_models.pipeline_anomaly_model\`
+        OPTIONS(
+          model_type='AUTOML_FORECASTING',
+          time_series_timestamp_col='timestamp',
+          time_series_data_col='duration_seconds',
+          time_series_id_col='workflow_name'
+        ) AS
+        SELECT
+          timestamp,
+          workflow_name,
+          duration_seconds
+        FROM \`${{ env.PROJECT_ID }}.pipeline_analytics.pipeline_runs\`
+        WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+        AND duration_seconds IS NOT NULL
+        "
+        
+        # Create failure prediction model
+        bq query --use_legacy_sql=false "
+        CREATE OR REPLACE MODEL \`${{ env.PROJECT_ID }}.ml_models.failure_prediction_model\`
+        OPTIONS(
+          model_type='LOGISTIC_REG',
+          input_label_cols=['failure']
+        ) AS
+        SELECT
+          duration_seconds,
+          jobs_total,
+          jobs_failed,
+          EXTRACT(HOUR FROM started_at) as hour_of_day,
+          EXTRACT(DAYOFWEEK FROM started_at) as day_of_week,
+          CASE WHEN status = 'failure' THEN true ELSE false END as failure
+        FROM \`${{ env.PROJECT_ID }}.pipeline_analytics.pipeline_runs\`
+        WHERE started_at >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
+        "
+
+  deploy-cloud-functions:
+    runs-on: ubuntu-latest
+    name: Deploy Cloud Functions
+    needs: terraform-apply
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+    
+    - name: Deploy GitHub Webhook Processor
+      run: |
+        gcloud functions deploy github-webhook-processor \
+          --gen2 \
+          --runtime=python311 \
+          --region=${{ env.REGION }} \
+          --source=functions/webhook-processor \
+          --entry-point=process_webhook \
+          --trigger-http \
+          --allow-unauthenticated \
+          --memory=512MB \
+          --timeout=300s \
+          --set-env-vars="PROJECT_ID=${{ env.PROJECT_ID }},PUBSUB_TOPIC=aetherveil-pipeline-events"
+
+  setup-monitoring:
+    runs-on: ubuntu-latest
+    name: Setup Monitoring and Alerting
+    needs: terraform-apply
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+    
+    - name: Create Monitoring Dashboards
+      run: |
+        # Create custom dashboard for autonomous platform
+        gcloud monitoring dashboards create --config-from-file=monitoring/autonomous-platform-dashboard.json
+        
+        # Create alerting policies
+        gcloud alpha monitoring policies create --policy-from-file=monitoring/alert-policies.yaml
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: Integration Tests
+    needs: [deploy-cloud-functions, setup-bigquery-ml, setup-monitoring]
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install test dependencies
+      run: |
+        pip install pytest httpx google-cloud-pubsub google-cloud-bigquery
+    
+    - name: Run integration tests
+      run: |
+        pytest tests/integration/test_autonomous_platform.py -v
+      env:
+        PROJECT_ID: ${{ env.PROJECT_ID }}
+        REGION: ${{ env.REGION }}
+
+  notify-deployment:
+    runs-on: ubuntu-latest
+    name: Notify Deployment Status
+    needs: [integration-tests]
+    if: always()
+    steps:
+    - name: Notify Success
+      if: needs.integration-tests.result == 'success'
+      run: |
+        echo "🚀 Autonomous AI-Powered DevOps Platform deployed successfully!"
+        echo "Phase ${{ github.event.inputs.deploy_phase || '1' }} deployment completed."
+        echo "Available endpoints:"
+        echo "- Pipeline Observer: https://pipeline-observer-$(echo ${{ env.PROJECT_ID }} | tr '_' '-')-uc.a.run.app"
+        echo "- Anomaly Detector: https://anomaly-detector-$(echo ${{ env.PROJECT_ID }} | tr '_' '-')-uc.a.run.app"
+        echo "- Self-Healing Engine: https://self-healing-engine-$(echo ${{ env.PROJECT_ID }} | tr '_' '-')-uc.a.run.app"
+    
+    - name: Notify Failure
+      if: needs.integration-tests.result != 'success'
+      run: |
+        echo "❌ Deployment failed. Check the logs for details."
+        exit 1

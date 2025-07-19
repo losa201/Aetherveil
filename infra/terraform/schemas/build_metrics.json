@@ -1,0 +1,170 @@
+[
+  {
+    "name": "metric_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Unique metric identifier"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "GitHub workflow run ID"
+  },
+  {
+    "name": "component",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Component being built (coordinator, scanner, etc.)"
+  },
+  {
+    "name": "branch",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Git branch name"
+  },
+  {
+    "name": "commit_sha",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Git commit SHA"
+  },
+  {
+    "name": "build_stage",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Build stage (compile, test, scan, deploy)"
+  },
+  {
+    "name": "stage_status",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Stage status (success, failure, skipped)"
+  },
+  {
+    "name": "duration_seconds",
+    "type": "FLOAT",
+    "mode": "REQUIRED",
+    "description": "Stage duration in seconds"
+  },
+  {
+    "name": "cache_hit",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "Whether cache was used"
+  },
+  {
+    "name": "cache_size_mb",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Cache size in MB"
+  },
+  {
+    "name": "image_size_mb",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Container image size in MB"
+  },
+  {
+    "name": "lines_of_code",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Total lines of code"
+  },
+  {
+    "name": "changed_files",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of changed files"
+  },
+  {
+    "name": "performance_metrics",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Performance metrics",
+    "fields": [
+      {
+        "name": "cpu_usage_percent",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "memory_usage_mb",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "disk_io_mb",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "network_io_mb",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "quality_metrics",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Code quality metrics",
+    "fields": [
+      {
+        "name": "cyclomatic_complexity",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "code_coverage",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "technical_debt_minutes",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "maintainability_index",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "error_details",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Error information for failed stages",
+    "fields": [
+      {
+        "name": "error_type",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "error_message",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "stack_trace",
+        "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "exit_code",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Metric collection timestamp"
+  }
+]

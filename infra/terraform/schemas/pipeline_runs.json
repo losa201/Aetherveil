@@ -1,0 +1,177 @@
+[
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "GitHub workflow run ID"
+  },
+  {
+    "name": "repository",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Repository name (org/repo)"
+  },
+  {
+    "name": "workflow_name",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Name of the GitHub Actions workflow"
+  },
+  {
+    "name": "branch",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Git branch name"
+  },
+  {
+    "name": "commit_sha",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Git commit SHA"
+  },
+  {
+    "name": "actor",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "User who triggered the workflow"
+  },
+  {
+    "name": "environment",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Deployment environment"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Workflow status (success, failure, cancelled)"
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Workflow start timestamp"
+  },
+  {
+    "name": "completed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Workflow completion timestamp"
+  },
+  {
+    "name": "duration_seconds",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Total duration in seconds"
+  },
+  {
+    "name": "conclusion",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Workflow conclusion"
+  },
+  {
+    "name": "jobs_total",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Total number of jobs"
+  },
+  {
+    "name": "jobs_failed",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "Number of failed jobs"
+  },
+  {
+    "name": "artifact_count",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Number of artifacts produced"
+  },
+  {
+    "name": "test_results",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Test execution results",
+    "fields": [
+      {
+        "name": "total_tests",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "passed_tests",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "failed_tests",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "coverage_percentage",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "security_scan_results",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Security scan results",
+    "fields": [
+      {
+        "name": "critical_vulnerabilities",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "high_vulnerabilities",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "medium_vulnerabilities",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "low_vulnerabilities",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "resource_usage",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "Resource usage metrics",
+    "fields": [
+      {
+        "name": "cpu_minutes",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "memory_gb_minutes",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "network_gb",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+      }
+    ]
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "Record insertion timestamp"
+  }
+]

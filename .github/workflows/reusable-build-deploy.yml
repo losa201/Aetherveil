@@ -34,7 +34,7 @@ jobs:
       id-token: write # Required for GCP OIDC
     strategy:
       matrix:
-        component: [coordinator, reconnaissance, scanner, osint, stealth, exploiter]
+        component: [coordinator, reconnaissance, scanner, osint, stealth, exploiter, pipeline-observer, anomaly-detector, self-healing-engine]
     steps:
     - uses: actions/checkout@v4
 
@@ -132,7 +132,7 @@ jobs:
 
     - name: Clean up old container images
       run: |
-        for component in coordinator reconnaissance scanner osint stealth exploiter; do
+        for component in coordinator reconnaissance scanner osint stealth exploiter pipeline-observer anomaly-detector self-healing-engine; do
           echo "Cleaning up images for aetherveil-${component}"
           gcloud artifacts docker images list ${{ env.GCP_ARTIFACT_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/aetherveil/${component} \
             --sort-by=~CREATE_TIME --limit=10 --format='get(version)' | tail -n +1 | \
