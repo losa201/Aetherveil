@@ -1,0 +1,27 @@
+# Core dependencies
+asyncio
+dataclasses
+typing
+pathlib
+json
+datetime
+enum
+collections
+hashlib
+uuid
+secrets
+statistics
+math
+re
+sqlite3
+
+# Optional dependencies (install if available)
+# playwright>=1.40.0
+# neo4j>=5.0.0
+# fake-useragent>=1.4.0
+# numpy>=1.20.0
+# aiofiles>=23.0.0
+
+# For development/testing
+# pytest>=7.0.0
+# pytest-asyncio>=0.21.0

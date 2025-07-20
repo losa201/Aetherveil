@@ -6,8 +6,9 @@
 set -e
 
 # Configuration
-PROJECT_ID="tidy-computing-465909-i3"
-REGION="us-central1"
+PROJECT_ID="${PROJECT_ID:-tidy-computing-465909-i3}"
+REGION="${REGION:-us-central1}"
+SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-aetherveil-cicd@tidy-computing-465909-i3.iam.gserviceaccount.com}"
 TERRAFORM_VERSION="1.7.0"
 
 # Colors for output
@@ -148,6 +149,7 @@ deploy_infrastructure() {
         -var="deploy_phase_1=true" \
         -var="deploy_phase_2=$([ "$phase" -ge 2 ] && echo true || echo false)" \
         -var="deploy_phase_3=$([ "$phase" -ge 3 ] && echo true || echo false)" \
+        -var="service_account_email=$SERVICE_ACCOUNT_EMAIL" \
         -out=tfplan
     
     # Apply infrastructure
@@ -336,6 +338,22 @@ setup_bigquery_ml() {
     )
     PARTITION BY DATE(timestamp)
     CLUSTER BY status, success
+    "
+
+    # Create Red Team Findings table
+    bq query --use_legacy_sql=false "
+    CREATE TABLE IF NOT EXISTS `$PROJECT_ID.security_analytics.red_team_findings` (
+        timestamp TIMESTAMP,
+        target STRING,
+        vulnerability_name STRING,
+        severity STRING,
+        description STRING,
+        recommendation STRING,
+        agent_id STRING,
+        status STRING
+    )
+    PARTITION BY DATE(timestamp)
+    CLUSTER BY target, vulnerability_name, severity
     "
     
     # Initialize Firestore with security rules (done via Terraform)

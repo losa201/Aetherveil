@@ -39,6 +39,24 @@ variable "zone" {
   default     = "us-central1-a"
 }
 
+variable "spoofed_regions" {
+  description = "Regions to simulate presence in (for spoofing)"
+  type        = list(string)
+  default     = ["europe-west1", "asia-southeast1"]
+}
+
+variable "domain_name" {
+  description = "Base domain for multi-region spoofing"
+  type        = string
+  default     = "aetherveil.com"
+}
+
+variable "enable_spoofing" {
+  description = "Enable multi-region spoofing mechanisms"
+  type        = bool
+  default     = true
+}
+
 variable "deploy_phase_1" {
   description = "Deploy Phase 1 components"
   type        = bool
@@ -63,6 +81,23 @@ variable "environment" {
   default     = "production"
 }
 
+variable "service_account_email" {
+  description = "Email of the service account used for CI/CD deployments."
+  type        = string
+}
+
+variable "hackerone_scope_content" {
+  description = "Content of the HackerOne scope file"
+  type        = string
+  default     = "{}"
+}
+
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for notifications"
+  type        = string
+  default     = "https://hooks.slack.com/services/placeholder"
+}
+
 locals {
   project_id = var.project_id
   region     = var.region
@@ -72,6 +107,17 @@ locals {
   deploy_phase_1 = var.deploy_phase_1
   deploy_phase_2 = var.deploy_phase_2
   deploy_phase_3 = var.deploy_phase_3
+  
+  # Spoofing configuration
+  spoofed_regions = var.spoofed_regions
+  all_regions     = concat([var.region], var.spoofed_regions)
+  
+  # Regional mappings for spoofing
+  region_mapping = {
+    "us-central1"     = { timezone = "America/Chicago", latency_base = 0 }
+    "europe-west1"    = { timezone = "Europe/London", latency_base = 120 }
+    "asia-southeast1" = { timezone = "Asia/Singapore", latency_base = 200 }
+  }
 }
 
 # Project configuration
@@ -105,7 +151,9 @@ resource "google_project_service" "apis" {
     "compute.googleapis.com",
     "cloudkms.googleapis.com",
     "securitycenter.googleapis.com",
-    "binaryauthorization.googleapis.com"
+    "binaryauthorization.googleapis.com",
+    "dns.googleapis.com",
+    "certificatemanager.googleapis.com"
   ])
   
   service = each.value
@@ -127,6 +175,241 @@ resource "google_kms_crypto_key" "main" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+# === MULTI-REGION SPOOFING INFRASTRUCTURE ===
+
+# Global static IP for Anycast
+resource "google_compute_global_address" "aetherveil_global" {
+  count        = var.enable_spoofing ? 1 : 0
+  name         = "aetherveil-global-ip"
+  address_type = "EXTERNAL"
+  ip_version   = "IPV4"
+}
+
+# Cloud DNS managed zone
+resource "google_dns_managed_zone" "aetherveil_zone" {
+  count       = var.enable_spoofing ? 1 : 0
+  name        = "aetherveil-zone"
+  dns_name    = "${var.domain_name}."
+  description = "Aetherveil multi-region DNS zone"
+  
+  dnssec_config {
+    state = "on"
+  }
+}
+
+# Regional DNS records for spoofing
+resource "google_dns_record_set" "regional_a_records" {
+  count        = var.enable_spoofing ? length(local.all_regions) : 0
+  managed_zone = google_dns_managed_zone.aetherveil_zone[0].name
+  name         = "${local.all_regions[count.index]}.${var.domain_name}."
+  type         = "A"
+  ttl          = 300
+  
+  rrdatas = [google_compute_global_address.aetherveil_global[0].address]
+}
+
+# Cloud CDN for global edge presence
+resource "google_compute_backend_service" "aetherveil_backend" {
+  count                           = var.enable_spoofing ? 1 : 0
+  name                           = "aetherveil-backend"
+  protocol                       = "HTTP"
+  timeout_sec                    = 30
+  enable_cdn                     = true
+  load_balancing_scheme          = "EXTERNAL_MANAGED"
+  
+  cdn_policy {
+    cache_mode       = "CACHE_ALL_STATIC"
+    default_ttl      = 3600
+    max_ttl          = 86400
+    negative_caching = true
+    signed_url_cache_max_age_sec = 7200
+    
+    negative_caching_policy {
+      code = 404
+      ttl  = 120
+    }
+  }
+  
+  backend {
+    group = google_compute_region_network_endpoint_group.aetherveil_neg[0].id
+  }
+}
+
+# Network Endpoint Group for Cloud Run
+resource "google_compute_region_network_endpoint_group" "aetherveil_neg" {
+  count                 = var.enable_spoofing ? 1 : 0
+  name                  = "aetherveil-neg"
+  network_endpoint_type = "SERVERLESS"
+  region                = local.region
+  
+  cloud_run {
+    service = google_cloud_run_service.pipeline_observer[0].name
+  }
+}
+
+# Global HTTPS Load Balancer
+resource "google_compute_url_map" "aetherveil_lb" {
+  count           = var.enable_spoofing ? 1 : 0
+  name            = "aetherveil-lb"
+  default_service = google_compute_backend_service.aetherveil_backend[0].id
+  
+  # Regional routing for spoofing
+  dynamic "host_rule" {
+    for_each = local.all_regions
+    content {
+      hosts        = ["${host_rule.value}.${var.domain_name}"]
+      path_matcher = "regional-${host_rule.value}"
+    }
+  }
+  
+  dynamic "path_matcher" {
+    for_each = local.all_regions
+    content {
+      name            = "regional-${path_matcher.value}"
+      default_service = google_compute_backend_service.aetherveil_backend[0].id
+      
+      # Note: Regional headers will be added at application level for cost optimization
+    }
+  }
+}
+
+# HTTPS target proxy
+resource "google_compute_target_https_proxy" "aetherveil_https_proxy" {
+  count   = var.enable_spoofing ? 1 : 0
+  name    = "aetherveil-https-proxy"
+  url_map = google_compute_url_map.aetherveil_lb[0].id
+  
+  ssl_certificates = [google_compute_managed_ssl_certificate.aetherveil_cert[0].id]
+}
+
+# Managed SSL certificate
+resource "google_compute_managed_ssl_certificate" "aetherveil_cert" {
+  count = var.enable_spoofing ? 1 : 0
+  name  = "aetherveil-cert"
+  
+  managed {
+    domains = concat(
+      ["${var.domain_name}"],
+      [for region in local.all_regions : "${region}.${var.domain_name}"]
+    )
+  }
+}
+
+# Global forwarding rule
+resource "google_compute_global_forwarding_rule" "aetherveil_https_forward" {
+  count       = var.enable_spoofing ? 1 : 0
+  name        = "aetherveil-https-forward"
+  target      = google_compute_target_https_proxy.aetherveil_https_proxy[0].id
+  port_range  = "443"
+  ip_address  = google_compute_global_address.aetherveil_global[0].address
+}
+
+# HTTP to HTTPS redirect
+resource "google_compute_url_map" "aetherveil_http_redirect" {
+  count = var.enable_spoofing ? 1 : 0
+  name  = "aetherveil-http-redirect"
+  
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
+
+resource "google_compute_target_http_proxy" "aetherveil_http_proxy" {
+  count   = var.enable_spoofing ? 1 : 0
+  name    = "aetherveil-http-proxy"
+  url_map = google_compute_url_map.aetherveil_http_redirect[0].id
+}
+
+resource "google_compute_global_forwarding_rule" "aetherveil_http_forward" {
+  count      = var.enable_spoofing ? 1 : 0
+  name       = "aetherveil-http-forward"
+  target     = google_compute_target_http_proxy.aetherveil_http_proxy[0].id
+  port_range = "80"
+  ip_address = google_compute_global_address.aetherveil_global[0].address
+}
+
+# === DUMMY INFRASTRUCTURE FOR SPOOFING ===
+
+# Dummy KMS keyrings in spoofed regions
+resource "google_kms_key_ring" "spoofed_region_keyrings" {
+  for_each = var.enable_spoofing ? toset(local.spoofed_regions) : toset([])
+  name     = "aetherveil-keyring-${each.value}"
+  location = each.value
+  project  = local.project_id
+}
+
+# Cost-optimized: Use only reserved IP addresses instead of VMs
+resource "google_compute_address" "spoofed_region_ips" {
+  for_each     = var.enable_spoofing ? toset(local.spoofed_regions) : toset([])
+  name         = "aetherveil-dummy-ip-${each.value}"
+  region       = each.value
+  address_type = "INTERNAL"
+  purpose      = "GCE_ENDPOINT"
+  
+  # Internal IP costs almost nothing but shows regional presence
+}
+
+# Cost-optimized: Minimal storage buckets with aggressive lifecycle
+resource "google_storage_bucket" "spoofed_region_buckets" {
+  for_each                    = var.enable_spoofing ? toset(local.spoofed_regions) : toset([])
+  name                        = "${local.project_id}-dummy-${each.value}"
+  location                    = upper(each.value)
+  force_destroy              = true
+  uniform_bucket_level_access = true
+  storage_class              = "COLDLINE"  # Cheapest storage class
+  
+  # No encryption to save KMS costs - dummy bucket anyway
+  
+  lifecycle_rule {
+    condition {
+      age = 1  # Delete after 1 day to minimize storage costs
+    }
+    action {
+      type = "Delete"
+    }
+  }
+  
+  lifecycle_rule {
+    condition {
+      age = 0
+    }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "ARCHIVE"  # Immediate archival
+    }
+  }
+}
+
+# Secret Manager for HackerOne Scope
+resource "google_secret_manager_secret" "hackerone_scope" {
+  project     = local.project_id
+  secret_id   = "hackerone-scope"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "hackerone_scope_version" {
+  secret      = google_secret_manager_secret.hackerone_scope.id
+  secret_data = var.hackerone_scope_content
+}
+
+# Secret Manager for Slack Webhook URL
+resource "google_secret_manager_secret" "slack_red_team_webhook" {
+  project     = local.project_id
+  secret_id   = "slack-red-team-webhook"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "slack_red_team_webhook_version" {
+  secret      = google_secret_manager_secret.slack_red_team_webhook.id
+  secret_data = var.slack_webhook_url
 }
 
 # Service accounts for different components
@@ -229,7 +512,8 @@ resource "google_project_iam_member" "red_team_pentester_permissions" {
     "roles/pubsub.subscriber",
     "roles/datastore.user",
     "roles/secretmanager.secretAccessor",
-    "roles/logging.logWriter"
+    "roles/logging.logWriter",
+    "roles/aiplatform.user"
   ])
   
   project = local.project_id
@@ -343,32 +627,29 @@ resource "google_pubsub_topic" "dead_letter" {
   name = "aetherveil-dead-letter"
 }
 
-# BigQuery datasets for analytics
+# Cost-optimized BigQuery datasets
 resource "google_bigquery_dataset" "pipeline_analytics" {
-  dataset_id  = "pipeline_analytics"
-  location    = "US"
-  description = "Pipeline performance and anomaly analytics"
+  dataset_id                      = "pipeline_analytics"
+  location                        = "US"
+  description                     = "Pipeline performance and anomaly analytics"
+  delete_contents_on_destroy     = true
+  default_table_expiration_ms    = 2592000000  # 30 days auto-deletion
   
-  default_encryption_configuration {
-    kms_key_name = google_kms_crypto_key.main.id
-  }
+  # Remove encryption to save KMS costs for non-sensitive data
+  # default_encryption_configuration {
+  #   kms_key_name = google_kms_crypto_key.main.id
+  # }
 }
 
-resource "google_bigquery_dataset" "ml_models" {
-  dataset_id  = "ml_models"
-  location    = "US"
-  description = "Machine learning models for DevOps automation"
-  
-  default_encryption_configuration {
-    kms_key_name = google_kms_crypto_key.main.id
-  }
-}
-
+# Combine ML and security datasets to save costs
 resource "google_bigquery_dataset" "security_analytics" {
-  dataset_id  = "security_analytics"
-  location    = "US"
-  description = "Security vulnerability findings and analytics"
+  dataset_id                      = "security_analytics"
+  location                        = "US"
+  description                     = "Security and ML analytics (combined for cost savings)"
+  delete_contents_on_destroy     = true
+  default_table_expiration_ms    = 2592000000  # 30 days auto-deletion
   
+  # Keep encryption only for security data
   default_encryption_configuration {
     kms_key_name = google_kms_crypto_key.main.id
   }
@@ -506,10 +787,29 @@ resource "google_cloud_run_service" "pipeline_observer" {
           value = google_bigquery_dataset.pipeline_analytics.dataset_id
         }
         
+        env {
+          name  = "SPOOFING_ENABLED"
+          value = var.enable_spoofing ? "true" : "false"
+        }
+        
+        env {
+          name  = "SUPPORTED_REGIONS"
+          value = join(",", local.all_regions)
+        }
+        
+        env {
+          name  = "REGION_MAPPING"
+          value = jsonencode(local.region_mapping)
+        }
+        
         resources {
           limits = {
-            cpu    = "2000m"
-            memory = "4Gi"
+            cpu    = "1000m"  # Reduced from 2000m
+            memory = "1Gi"    # Reduced from 4Gi
+          }
+          requests = {
+            cpu    = "100m"   # Minimal baseline
+            memory = "256Mi" 
           }
         }
       }
@@ -517,9 +817,11 @@ resource "google_cloud_run_service" "pipeline_observer" {
     
     metadata {
       annotations = {
-        "autoscaling.knative.dev/minScale" = "1"
-        "autoscaling.knative.dev/maxScale" = "10"
-        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+        "autoscaling.knative.dev/minScale" = "0"  # Scale to zero for cost savings
+        "autoscaling.knative.dev/maxScale" = "3"   # Reduced max scale
+        "run.googleapis.com/cpu-throttling" = "true"
+        "run.googleapis.com/execution-environment" = "gen2"
+        # Remove VPC connector to save costs - use serverless VPC access instead
       }
     }
   }
@@ -530,13 +832,28 @@ resource "google_cloud_run_service" "pipeline_observer" {
   }
 }
 
-# VPC Connector for Cloud Run
-resource "google_vpc_access_connector" "main" {
-  name          = "aetherveil-connector"
-  region        = local.region
-  ip_cidr_range = "10.8.0.0/28"
-  network       = google_compute_network.vpc.name
+# Red Team Pentester Agent (Phase 2)
+module "red_team_pentester_v2" {
+  count = local.deploy_phase_2 ? 1 : 0
+  source = "./modules/red_team_agent_v2"
+
+  project_id                   = local.project_id
+  region                       = local.region
+  service_account_email        = google_service_account.red_team_pentester.email
+  artifact_registry_repository = "aetherveil"
+  bigquery_dataset_id          = google_bigquery_dataset.security_analytics.dataset_id
+  vpc_connector_id             = null  # VPC connector removed for cost optimization
+  # hackerone_scope_file_path = "gs://your-bucket/hackerone_scope.json" # Uncomment and configure if using GCS
 }
+
+# Cost optimization: Remove VPC connector, use serverless VPC access
+# Saves ~$50-100/month
+# resource "google_vpc_access_connector" "main" {
+#   name          = "aetherveil-connector"
+#   region        = local.region
+#   ip_cidr_range = "10.8.0.0/28"
+#   network       = google_compute_network.vpc.name
+# }
 
 # Cloud Functions for event processing
 resource "google_cloudfunctions2_function" "webhook_processor" {
@@ -577,20 +894,33 @@ resource "google_cloudfunctions2_function" "webhook_processor" {
   }
 }
 
-# Storage for Cloud Functions source
+# Cost-optimized storage for Cloud Functions
 resource "google_storage_bucket" "function_source" {
-  name     = "${local.project_id}-function-source"
-  location = local.region
+  name          = "${local.project_id}-functions"
+  location      = local.region
+  storage_class = "STANDARD"  # Standard is often cheapest for small files
+  force_destroy = true
   
-  encryption {
-    default_kms_key_name = google_kms_crypto_key.main.id
+  # Remove encryption to save KMS costs
+  # encryption {
+  #   default_kms_key_name = google_kms_crypto_key.main.id
+  # }
+  
+  lifecycle_rule {
+    condition {
+      age = 7  # Clean up old function sources after 7 days
+    }
+    action {
+      type = "Delete"
+    }
   }
 }
 
+# Placeholder - actual source will be uploaded during deployment
 resource "google_storage_bucket_object" "webhook_processor_source" {
-  name   = "webhook-processor-source.zip"
-  bucket = google_storage_bucket.function_source.name
-  source = "${path.module}/functions/webhook_processor.zip"
+  name    = "webhook-processor-source.zip"
+  bucket  = google_storage_bucket.function_source.name
+  content = "placeholder"  # Will be replaced during deployment
 }
 
 # Vertex AI for ML models (Phase 2)
@@ -605,62 +935,16 @@ resource "google_vertex_ai_endpoint" "anomaly_detection" {
   }
 }
 
-# GKE cluster for Phase 2/3 advanced agents
-resource "google_container_cluster" "ado_cluster" {
-  count    = local.deploy_phase_2 ? 1 : 0
-  name     = "ado-cluster"
-  location = local.region
-  
-  remove_default_node_pool = true
-  initial_node_count       = 1
-  
-  network    = google_compute_network.vpc.name
-  subnetwork = google_compute_subnetwork.main.name
-  
-  workload_identity_config {
-    workload_pool = "${local.project_id}.svc.id.goog"
-  }
-  
-  database_encryption {
-    state    = "ENCRYPTED"
-    key_name = google_kms_crypto_key.main.id
-  }
-  
-  binary_authorization {
-    evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE"
-  }
-}
-
-resource "google_container_node_pool" "ado_nodes" {
-  count      = local.deploy_phase_2 ? 1 : 0
-  name       = "ado-node-pool"
-  location   = local.region
-  cluster    = google_container_cluster.ado_cluster[0].name
-  node_count = 3
-  
-  node_config {
-    preemptible  = false
-    machine_type = "e2-standard-4"
-    
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
-    
-    workload_metadata_config {
-      mode = "GKE_METADATA"
-    }
-    
-    shielded_instance_config {
-      enable_secure_boot          = true
-      enable_integrity_monitoring = true
-    }
-  }
-  
-  management {
-    auto_repair  = true
-    auto_upgrade = true
-  }
-}
+# Cost optimization: Remove GKE cluster for Phase 1 (not needed)
+# Saves ~$200-500/month
+# GKE cluster will be added in Phase 2 when budget increases
+# 
+# resource "google_container_cluster" "ado_cluster" {
+#   count    = local.deploy_phase_2 ? 1 : 0
+#   name     = "ado-cluster"
+#   location = local.region
+#   ...
+# }
 
 # Monitoring and alerting
 resource "google_monitoring_alert_policy" "pipeline_failure" {
@@ -724,5 +1008,111 @@ output "service_accounts" {
     anomaly_detector  = google_service_account.anomaly_detector.email
     healing_engine    = google_service_account.healing_engine.email
     ado_orchestrator  = local.deploy_phase_2 ? google_service_account.ado_orchestrator[0].email : null
+  }
+}
+
+# === SPOOFING OUTPUTS ===
+output "spoofing_info" {
+  value = var.enable_spoofing ? {
+    global_ip              = google_compute_global_address.aetherveil_global[0].address
+    dns_zone               = google_dns_managed_zone.aetherveil_zone[0].dns_name
+    regional_endpoints     = [for region in local.all_regions : "${region}.${var.domain_name}"]
+    cdn_enabled           = true
+    dummy_regions         = local.spoofed_regions
+    ssl_certificate_domains = google_compute_managed_ssl_certificate.aetherveil_cert[0].managed[0].domains
+  } : null
+}
+
+output "verification_commands" {
+  value = var.enable_spoofing ? {
+    check_global_ip     = "dig ${var.domain_name}"
+    check_regional_dns  = [for region in local.all_regions : "dig ${region}.${var.domain_name}"]
+    test_latency_spoofing = [for region in local.all_regions : "curl -H 'Host: ${region}.${var.domain_name}' https://${google_compute_global_address.aetherveil_global[0].address}/ -I"]
+    check_cdn_headers   = "curl -H 'Host: ${var.domain_name}' https://${google_compute_global_address.aetherveil_global[0].address}/ -I"
+  } : null
+}
+
+# Synthetic audit logging for fake regional activity
+resource "google_bigquery_table" "synthetic_audit_logs" {
+  count      = var.enable_spoofing ? 1 : 0
+  dataset_id = google_bigquery_dataset.security_analytics.dataset_id
+  table_id   = "synthetic_audit_logs"
+  
+  schema = jsonencode([
+    {
+      name = "timestamp"
+      type = "TIMESTAMP"
+      mode = "REQUIRED"
+    },
+    {
+      name = "region"
+      type = "STRING"
+      mode = "REQUIRED"
+    },
+    {
+      name = "service"
+      type = "STRING"
+      mode = "REQUIRED"
+    },
+    {
+      name = "operation"
+      type = "STRING"
+      mode = "REQUIRED"
+    },
+    {
+      name = "resource_name"
+      type = "STRING"
+      mode = "NULLABLE"
+    },
+    {
+      name = "principal_email"
+      type = "STRING"
+      mode = "NULLABLE"
+    },
+    {
+      name = "source_ip"
+      type = "STRING"
+      mode = "NULLABLE"
+    },
+    {
+      name = "user_agent"
+      type = "STRING"
+      mode = "NULLABLE"
+    }
+  ])
+  
+  time_partitioning {
+    type  = "DAY"
+    field = "timestamp"
+  }
+  
+  clustering = ["region", "service", "operation"]
+}
+
+# Cost-optimized: Reduce synthetic log frequency
+resource "google_cloud_scheduler_job" "synthetic_audit_generator" {
+  count            = var.enable_spoofing ? 1 : 0
+  name             = "synthetic-audit-generator"
+  description      = "Generate synthetic audit logs for regional spoofing"
+  schedule         = "0 */6 * * *"  # Every 6 hours instead of 15 minutes
+  time_zone        = "UTC"
+  region           = local.region
+  
+  http_target {
+    http_method = "POST"
+    uri         = google_cloud_run_service.pipeline_observer[0].status[0].url
+    
+    headers = {
+      "Content-Type" = "application/json"
+    }
+    
+    body = base64encode(jsonencode({
+      action = "generate_synthetic_audit_logs"
+      regions = local.spoofed_regions
+    }))
+    
+    oidc_token {
+      service_account_email = google_service_account.pipeline_observer.email
+    }
   }
 }

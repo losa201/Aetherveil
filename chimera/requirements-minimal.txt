@@ -1,0 +1,24 @@
+# Minimal Dependencies for Chimera Core Functionality
+# Essential packages only for initial deployment
+
+# Core Python dependencies
+asyncio-throttle==1.0.2
+aiohttp==3.9.1
+aiofiles==23.2.1
+pyyaml==6.0.1
+sqlite3
+
+# Lightweight alternatives
+requests==2.31.0
+beautifulsoup4==4.12.2
+click==8.1.7
+
+# Basic ML/Data processing
+numpy==1.26.2
+
+# Development tools
+pytest==7.4.3
+black==23.12.0
+
+# ARM64 optimized
+psutil==5.9.6

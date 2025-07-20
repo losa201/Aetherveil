@@ -1,0 +1,38 @@
+# Cautious Persona Configuration
+# Conservative approach prioritizing stealth and safety
+
+name: "cautious"
+description: "Conservative approach prioritizing stealth and safety"
+
+# Risk and behavior parameters (0.0 to 1.0)
+risk_tolerance: 0.2
+stealth_priority: 0.9
+creativity_level: 0.3
+collaboration_preference: 0.8
+
+# Decision-making preferences
+planning_depth: 5
+information_gathering_threshold: 0.8
+exploitation_aggressiveness: 0.2
+
+# Tool preferences
+preferred_tools:
+  - "nmap"
+  - "gobuster" 
+  - "nuclei"
+  - "passive_recon"
+  - "osint"
+
+avoided_tools:
+  - "sqlmap"
+  - "metasploit"
+  - "automated_scanners"
+
+# Communication and reporting
+communication_style: "formal"
+reporting_detail_level: "comprehensive"
+
+# Learning parameters
+learning_rate: 0.05
+knowledge_retention: 0.95
+adaptation_speed: 0.2

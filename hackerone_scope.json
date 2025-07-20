@@ -1,0 +1,10 @@
+{
+  "targets": [
+    {
+      "target": "http://dummy-target.example.com",
+      "asset_type": "URL",
+      "in_scope": true
+    }
+  ],
+  "notes": "This is a placeholder scope. Replace with actual HackerOne targets."
+}

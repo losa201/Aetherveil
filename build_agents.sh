@@ -45,6 +45,7 @@ declare -A PHASE_1_AGENTS=(
 
 declare -A PHASE_2_AGENTS=(
     ["ado-orchestrator"]="agents/ado_orchestrator"
+    ["red-team-pentester-v2"]="agents/red_team_pentester_v2"
 )
 
 declare -A PHASE_3_AGENTS=(

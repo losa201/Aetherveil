@@ -1,0 +1,144 @@
+# Chimera Main Configuration
+# Neuroplastic Autonomous Red-Team Organism
+
+# Core Engine Settings
+core:
+  max_concurrent_tasks: 4
+  task_timeout: 3600  # 1 hour
+  auto_save_interval: 300  # 5 minutes
+  event_queue_size: 1000
+  
+# Persona Configuration
+persona:
+  default: "balanced"
+  available_personas:
+    - cautious
+    - balanced
+    - aggressive
+    - creative
+    - stealth_focused
+  persona_config_dir: "./configs/personas/"
+  
+# Reasoner Settings
+reasoner:
+  decision_confidence_threshold: 0.7
+  max_reasoning_depth: 5
+  knowledge_weight_decay: 0.95
+  learning_rate: 0.1
+  
+# Memory and Knowledge Graph
+memory:
+  graph_database: "./data/knowledge/graph.db"
+  max_nodes: 100000
+  max_edges: 500000
+  pruning_threshold: 0.1
+  backup_interval: 3600  # 1 hour
+  compression_enabled: true
+  
+# Web Search and Scraping
+web:
+  search_engines:
+    - google
+    - bing
+    - duckduckgo
+  max_search_results: 50
+  scraping_delay_range: [2, 8]  # seconds
+  user_agent_rotation: true
+  proxy_rotation: true
+  javascript_enabled: true
+  
+# LLM Collaboration
+llm:
+  providers:
+    - claude_web
+    - chatgpt_web
+    - gemini_web
+  fallback_enabled: true
+  response_validation: true
+  confidence_threshold: 0.8
+  rate_limiting: true
+  
+# Planning and Synthesis
+planner:
+  max_plan_complexity: 10
+  optimization_enabled: true
+  risk_assessment: true
+  timeline_estimation: true
+  resource_allocation: true
+  
+# Execution and OPSEC
+executor:
+  stealth_mode: true
+  traffic_mixing: true
+  decoy_requests: true
+  ip_rotation: true
+  timing_randomization: true
+  tools:
+    nmap: true
+    gobuster: true
+    sqlmap: false  # High-risk tool, disabled by default
+    nuclei: true
+    subfinder: true
+    
+# OPSEC and Deception
+opsec:
+  fingerprint_randomization: true
+  cover_traffic_generation: true
+  polymorphic_behavior: true
+  detection_evasion: true
+  attribution_resistance: true
+  
+# Validation and Sandbox
+validator:
+  sandbox_enabled: true
+  safety_checks: true
+  code_analysis: true
+  behavior_monitoring: true
+  rollback_capability: true
+  
+# Reporting
+reporter:
+  output_formats: ["markdown", "html", "json"]
+  template_dir: "./chimera/reporter/templates/"
+  include_technical_details: true
+  include_remediation: true
+  severity_scoring: "cvss"
+  
+# Bug Bounty Integration
+bug_bounty:
+  platforms:
+    - hackerone
+    - bugcrowd
+    - intigriti
+  auto_submission: false
+  scope_validation: true
+  duplicate_detection: true
+  
+# Logging and Monitoring
+logging:
+  level: "INFO"
+  file: "./data/logs/chimera.log"
+  rotation: "daily"
+  retention_days: 30
+  structured_logging: true
+  
+# Security and Safety
+security:
+  encryption_at_rest: true
+  secure_communication: true
+  credential_protection: true
+  audit_logging: true
+  
+# Advanced Features
+advanced:
+  neuroplasticity: true
+  self_modification: false  # Requires careful consideration
+  autonomous_updates: false
+  collaborative_learning: true
+  
+# Resource Limits
+limits:
+  max_memory_usage: "2GB"
+  max_disk_usage: "10GB"
+  max_network_bandwidth: "100MB/s"
+  max_cpu_usage: 80  # percentage

@@ -1,0 +1,51 @@
+# Core dependencies
+asyncio-throttle==1.0.2
+aiohttp==3.9.1
+aiofiles==23.2.1
+networkx==3.2.1
+pyyaml==6.0.1
+
+sqlalchemy==2.0.25
+alembic==1.13.1
+
+# Web automation and stealth
+selenium==4.16.0
+selenium-stealth==1.0.6
+playwright==1.40.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+fake-useragent==1.4.0
+curl-cffi==0.6.2
+
+# Security tools integration
+python-nmap==0.7.1
+paramiko==3.4.0
+dnspython==2.4.2
+
+# Data processing and ML
+pandas==2.1.4
+numpy==1.26.2
+scikit-learn==1.3.2
+transformers==4.36.2
+sentence-transformers==2.2.2
+
+# Cryptography and privacy
+cryptography==45.0.5
+pycryptodome==3.19.0
+tor-python-easy==0.1.2
+
+# CLI and UI
+click==8.1.7
+rich==13.7.0
+prompt-toolkit==3.0.43
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.12.0
+flake8==6.1.0
+mypy==1.8.0
+
+# ARM64 specific optimizations
+psutil==5.9.6
+orjson==3.9.10

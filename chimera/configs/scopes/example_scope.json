@@ -1,0 +1,58 @@
+{
+  "program_name": "Example Bug Bounty Program",
+  "target": "example.com",
+  "domains": [
+    "example.com",
+    "*.example.com",
+    "api.example.com",
+    "blog.example.com"
+  ],
+  "exclusions": [
+    "status.example.com",
+    "test.example.com",
+    "staging.example.com"
+  ],
+  "ip_ranges": [
+    "192.168.1.0/24"
+  ],
+  "rules": {
+    "max_requests_per_minute": 30,
+    "allowed_techniques": [
+      "scanning",
+      "enumeration", 
+      "manual_testing",
+      "passive_reconnaissance",
+      "osint_gathering"
+    ],
+    "forbidden_techniques": [
+      "dos",
+      "ddos", 
+      "data_modification",
+      "data_destruction",
+      "social_engineering",
+      "physical_attacks"
+    ],
+    "special_instructions": [
+      "Do not test during business hours (9-5 EST)",
+      "Report critical vulnerabilities within 24 hours",
+      "Include proof of concept for all findings"
+    ]
+  },
+  "reward_structure": {
+    "critical": "$5000-$10000",
+    "high": "$1000-$5000",
+    "medium": "$500-$1000", 
+    "low": "$100-$500",
+    "informational": "$0"
+  },
+  "contact": {
+    "email": "security@example.com",
+    "platform": "hackerone",
+    "response_time": "72 hours"
+  },
+  "legal": {
+    "safe_harbor": true,
+    "disclosure_policy": "responsible_disclosure",
+    "testing_authorization": "bug_bounty_program"
+  }
+}

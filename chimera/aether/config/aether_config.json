@@ -1,0 +1,75 @@
+{
+  "agent": {
+    "consciousness_target": 0.8,
+    "curiosity_threshold": 0.7,
+    "learning_velocity_target": 0.6,
+    "default_learning_mode": "adaptive",
+    "max_concurrent_learning_topics": 3,
+    "learning_session_duration_minutes": 15,
+    "code_evolution_enabled": true,
+    "max_mutations_per_cycle": 2,
+    "mutation_confidence_threshold": 0.8,
+    "identity_rotation_interval_hours": 24,
+    "max_active_identities": 3,
+    "stealth_level": 0.8,
+    "behavior_profile": "curious",
+    "introspection_interval_hours": 2,
+    "memory_consolidation_interval_hours": 6,
+    "system_maintenance_interval_hours": 12
+  },
+  "events": {
+    "max_event_workers": 3,
+    "debug_events": true,
+    "log_all_events": false,
+    "max_event_history": 1000
+  },
+  "memory": {
+    "consolidation_interval_hours": 6,
+    "data_dir": "./data",
+    "forgetting_curve_lambda": 0.1,
+    "consolidation_threshold": 0.7,
+    "max_working_memory": 50
+  },
+  "browser": {
+    "headless": true,
+    "stealth_level": 0.8,
+    "behavior_profile": "curious",
+    "proxy": null,
+    "timeout": 30000
+  },
+  "cognitive": {
+    "curiosity_threshold": 0.7,
+    "consciousness_check_interval": 1800,
+    "max_curiosity_questions": 5,
+    "max_knowledge_gaps": 10,
+    "curiosity_trigger_threshold": 0.8
+  },
+  "evolution": {
+    "codebase_path": "/root/Aetherveil/chimera/aether",
+    "max_mutations_per_cycle": 2,
+    "min_confidence_threshold": 0.7,
+    "backup_retention_days": 7,
+    "test_timeout": 300
+  },
+  "identity": {
+    "max_identities": 5,
+    "rotation_schedule": "adaptive",
+    "gmail_automation": true,
+    "footprint_building": true
+  },
+  "mentors": {
+    "default_mentors": ["chatgpt", "claude"],
+    "max_concurrent_conversations": 2,
+    "rapport_building": true,
+    "trust_threshold": 0.5
+  },
+  "synthesis": {
+    "validation_level": "standard",
+    "insight_synthesis": true,
+    "learning_tracking": true,
+    "quality_thresholds": {
+      "min_validation_score": 0.6,
+      "min_insight_confidence": 0.5
+    }
+  }
+}

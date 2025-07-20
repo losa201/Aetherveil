@@ -1,0 +1,82 @@
+# Aetherveil AI Pentesting Agent Configuration
+
+# Local LLM Configuration
+llm:
+  model_dir: "./models"
+  model_name: "codellama-7b-instruct.Q4_K_M.gguf"
+  context_length: 4096
+  max_tokens: 1024
+  temperature: 0.7
+  top_p: 0.9
+  threads: 4
+  gpu_layers: 0  # Set to > 0 if you have GPU support
+
+# Planning Configuration
+planning:
+  cycle_delay: 300  # 5 minutes between cycles
+  max_tasks_per_cycle: 5
+  planning_timeout: 120  # 2 minutes for planning
+  adaptive_planning: true
+
+# Execution Configuration
+execution:
+  task_timeout: 300  # 5 minutes per task
+  task_delay: 30    # 30 seconds between tasks
+  max_parallel_tasks: 1  # Conservative for resource usage
+  default_target: "127.0.0.1"  # Localhost for testing
+  cleanup_temp_files: true
+  
+  # Safety limits
+  max_scan_rate: 100  # Max packets/second for network scans
+  max_request_rate: 10  # Max requests/second for web tools
+
+# Storage Configuration
+storage:
+  base_dir: "./aetherveil_data"
+  results_dir: "./aetherveil_data/results"
+  temp_dir: "./aetherveil_data/temp"
+  tools_dir: "./aetherveil_data/tools"
+  reports_dir: "./aetherveil_data/reports"
+  max_storage_mb: 1024  # 1GB max storage
+
+# Learning Configuration
+learning:
+  retrain_frequency: 10  # Every 10 cycles
+  learning_rate: 0.01
+  min_samples_for_learning: 5
+  confidence_threshold: 0.7
+  knowledge_retention_days: 30
+
+# Reporting Configuration
+reporting:
+  detailed_frequency: 5  # Every 5 cycles
+  summary_frequency: 20  # Every 20 cycles
+  enable_gcp_sync: false
+
+# GCP Integration Configuration
+gcp:
+  enabled: false
+  project_id: ""
+  dataset_id: "aetherveil_data"
+  bucket_name: ""
+  service_account_path: ""
+  
+  # BigQuery table names
+  results_table: "pentesting_results"
+  learning_table: "learning_data"
+  metrics_table: "performance_metrics"
+
+# Error Recovery Configuration
+error_recovery:
+  max_retries: 3
+  retry_delay: 60  # 1 minute
+  exponential_backoff: true
+  circuit_breaker_threshold: 5
+
+# Security Configuration
+security:
+  enable_safe_mode: true
+  allowed_targets: ["127.0.0.1", "localhost"]
+  blocked_ports: [22, 3389]  # SSH, RDP
+  max_concurrent_scans: 1
+  require_target_validation: true
